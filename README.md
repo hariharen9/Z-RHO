@@ -1,73 +1,93 @@
-# React + TypeScript + Vite
+# Z-RHO — Personal Debt Lifecycle Manager
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A sleek, robust, full-stack personal debt tracking Progressive Web App (PWA). Built specifically to track loans and credit card debts, it automates derived financial values, provides visual progress updates, and empowers users with powerful prepayment simulators.
 
-Currently, two official plugins are available:
+**Built with 💜 by [Hariharen](https://hariharen.site).**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ✨ Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 📈 Smart Dashboard
+- **Aggregated Live Metrics:** Track total outstanding debt, monthly obligations, and credit limit utilization in real-time.
+- **Interactive Data Visualizations:** Beautiful, responsive charts built with Recharts, including:
+  - *Debt Reduction Curve:* Track the 12-month trajectory of your active debts.
+  - *Monthly Outflow Stacked Chart:* View your monthly obligations split between EMIs and credit card statements.
+- **Upcoming Payments Calendar:** A unified 30-day timeline showing upcoming payments, color-coded by urgency.
 
-## Expanding the ESLint configuration
+### 🏠 Loan Management
+- **Full Support:** Track home, personal, auto, education, or business loans with granular tracking of principal, interest, and tenure.
+- **Live Interactive Math:** Instantly calculates EMIs, total interest, and total payable *as you type*.
+- **Amortization Schedules:** Generates comprehensive month-by-month breakdowns of your principal vs. interest split.
+- **Prepayment Simulator:** Interactively test how extra principal prepayments shave months off your tenure and save interest *before* submitting.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 💳 Credit Card Management
+- **Sleek Mock Cards:** Beautiful gradient-based card representations.
+- **Statement & Due Dates:** Automatic billing cycle tracking and upcoming statement generations based on custom card parameters.
+- **Transaction Ledger:** Record both debits and credits with categorical tracking.
+- **Bill Status Management:** Seamlessly track generated, paid, upcoming, or overdue credit card bills.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### ⚙️ Settings & Core
+- **Multi-Currency System:** Choose a default currency (INR, USD, EUR, etc.) and watch all dashboard metrics auto-convert.
+- **Dynamic Theme System:** Smooth transitions between Light, Dark, and System modes.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+---
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 🛠️ Technology Stack
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+- **Frontend:** React 18 + TypeScript + Vite
+- **Styling:** Tailwind CSS v4 (native CSS configuration) + Framer Motion
+- **State Management:** Zustand (Auth & UI) + TanStack React Query v5 (Data syncing)
+- **Forms & Validation:** React Hook Form + Zod
+- **Charts:** Recharts
+- **Database & Auth:** Supabase (PostgreSQL with strict Row-Level Security policies)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js (v18+)
+- A Supabase Project
+
+### Installation & Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd zrho
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment Variables:**
+   Create a `.env.local` file in the root directory (you can copy `.env.example` as a template):
+   ```env
+   VITE_SUPABASE_URL=https://your-project-id.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-supabase-anon-public-key
+   ```
+
+4. **Initialize Supabase Database Schema:**
+   Go to your **Supabase Project -> SQL Editor**, open the SQL files in `supabase/migrations/` in numerical order, and execute them to create the tables, triggers, and Row-Level Security policies:
+   - [001_profiles.sql](supabase/migrations/001_profiles.sql)
+   - [002_loans.sql](supabase/migrations/002_loans.sql)
+   - [003_loan_payments.sql](supabase/migrations/003_loan_payments.sql)
+   - [004_credit_cards.sql](supabase/migrations/004_credit_cards.sql)
+   - [005_cc_transactions.sql](supabase/migrations/005_cc_transactions.sql)
+   - [006_cc_bills.sql](supabase/migrations/006_cc_bills.sql)
+
+5. **Run the Development Server:**
+   ```bash
+   npm run dev
+   ```
+   Open `http://localhost:5173` in your browser.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
