@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* ============================================================
+   ZRHO — Global Styles + Design Tokens
+   ============================================================ */
+
+@theme {
+  --color-zrho-bg: #0F0F14;
+  --color-zrho-surface: #1A1A24;
+  --color-zrho-surface-2: #242433;
+  --color-zrho-border: #2E2E3F;
+  --color-zrho-text: #E8E8ED;
+  --color-zrho-text-muted: #8B8B9E;
+  --color-zrho-accent: #6366f1;
+  --color-zrho-accent-hover: #818cf8;
+  --color-zrho-success: #22c55e;
+  --color-zrho-warning: #f59e0b;
+  --color-zrho-danger: #ef4444;
+  --color-zrho-info: #3b82f6;
+}
+
+/* ---- Base ---- */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--color-zrho-bg);
+  color: var(--color-zrho-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-zrho-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-zrho-border);
+  border-radius: 3px;
+}
+
+/* ---- Focus ---- */
+*:focus-visible {
+  outline: 2px solid var(--color-zrho-accent);
+  outline-offset: 2px;
+}
+
+/* ---- Light theme overrides ---- */
+.light {
+  --color-zrho-bg: #f8f9fa;
+  --color-zrho-surface: #ffffff;
+  --color-zrho-surface-2: #f1f3f5;
+  --color-zrho-border: #dee2e6;
+  --color-zrho-text: #212529;
+  --color-zrho-text-muted: #6c757d;
+}
+
+.light body {
+  background-color: var(--color-zrho-bg);
+  color: var(--color-zrho-text);
+}
