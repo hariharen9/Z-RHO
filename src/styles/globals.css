@@ -190,4 +190,70 @@
   .bg-success\/10 { background-color: color-mix(in oklab, var(--success) 12%, transparent); }
   .bg-warning\/10 { background-color: color-mix(in oklab, var(--warning) 14%, transparent); }
   .bg-destructive\/10 { background-color: color-mix(in oklab, var(--destructive) 12%, transparent); }
+
+  /* Premium Sleek, Shiny, Animated Button Utility - Polished Silver Edition */
+  .btn-shiny {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(
+      110deg,
+      oklch(0.86 0.01 240) 0%,
+      oklch(0.98 0 0) 50%,
+      oklch(0.86 0.01 240) 100%
+    );
+    border: 1px solid color-mix(in oklab, white 40%, transparent);
+    color: oklch(0.08 0 0);
+    box-shadow: 
+      0 4px 12px -2px rgba(0, 0, 0, 0.35),
+      0 0 8px -1px rgba(255, 255, 255, 0.25);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .btn-shiny:hover:not(:disabled) {
+    background: linear-gradient(
+      110deg,
+      oklch(0.90 0.01 240) 0%,
+      oklch(1.0 0 0) 50%,
+      oklch(0.90 0.01 240) 100%
+    );
+    border-color: color-mix(in oklab, white 60%, transparent);
+    box-shadow: 
+      0 8px 20px -4px rgba(0, 0, 0, 0.4),
+      0 0 16px 2px rgba(255, 255, 255, 0.4);
+    transform: translateY(-1px);
+    color: oklch(0.04 0 0);
+  }
+
+  .btn-shiny:active:not(:disabled) {
+    transform: translateY(1px) scale(0.98);
+  }
+
+  .btn-shiny::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -70%;
+    width: 35%;
+    height: 200%;
+    background: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.6) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(25deg);
+    animation: shine 4s infinite cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  @keyframes shine {
+    0% {
+      left: -70%;
+    }
+    18% {
+      left: 130%;
+    }
+    100% {
+      left: 130%;
+    }
+  }
 }

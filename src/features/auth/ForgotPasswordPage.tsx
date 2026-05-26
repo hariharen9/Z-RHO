@@ -1,11 +1,13 @@
 // ============================================================
-// ZRHO — Auth: Forgot Password Page
+// ZRHO — Auth: Forgot Password Page (Redesigned)
 // ============================================================
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/Button';
+import { Mail, ArrowRight, AlertCircle } from 'lucide-react';
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -29,59 +31,111 @@ export function ForgotPasswordPage() {
     }
   };
 
+  // Framer Motion Animation Variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.08
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    show: { 
+      opacity: 1, 
+      y: 0, 
+      transition: { type: "spring" as const, stiffness: 300, damping: 24 } 
+    }
+  };
+
   if (sent) {
     return (
-      <div className="text-center py-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="text-center py-4"
+      >
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-4 animate-bounce">
+          <Mail size={22} />
+        </div>
         <h2 className="text-xl font-semibold mb-2">Check your email</h2>
-        <p className="text-[var(--color-zrho-text-muted)] text-sm mb-4">
-          We've sent a password reset link to <strong>{email}</strong>.
+        <p className="text-muted-foreground text-sm mb-5 px-2">
+          We've sent a password reset link to <strong className="text-foreground">{email}</strong>.
         </p>
-        <Link to="/login" className="text-[var(--color-zrho-accent)] hover:underline text-sm">
-          Back to Sign In
+        <Link 
+          to="/login" 
+          className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 font-semibold uppercase tracking-wider"
+        >
+          Back to Sign In <ArrowRight size={12} />
         </Link>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold mb-2">Reset Password</h2>
-      <p className="text-[var(--color-zrho-text-muted)] text-sm mb-6">
-        Enter your email and we'll send you a reset link.
-      </p>
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
+      className="w-full"
+    >
+      <motion.div variants={itemVariants} className="text-center mb-6">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Reset Password</h2>
+        <p className="text-xs text-muted-foreground mt-1.5">Enter your email and we'll send you a recovery link</p>
+      </motion.div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
-          {error}
-        </div>
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 flex items-center gap-2.5 p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive-foreground text-xs"
+        >
+          <AlertCircle size={14} className="shrink-0 text-destructive" />
+          <span>{error}</span>
+        </motion.div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm text-[var(--color-zrho-text-muted)] mb-1">
-            Email
+        {/* Email Address */}
+        <motion.div variants={itemVariants} className="space-y-1.5">
+          <label htmlFor="email" className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Email Address
           </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full px-3 py-2 bg-[var(--color-zrho-surface-2)] border border-[var(--color-zrho-border)] rounded-lg text-[var(--color-zrho-text)] focus:border-[var(--color-zrho-accent)] outline-none"
-            placeholder="you@example.com"
-          />
-        </div>
+          <div className="relative flex items-center">
+            <Mail size={16} className="absolute left-3.5 text-muted-foreground/50" />
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full pl-10 pr-4 py-2.5 bg-surface-elevated/40 border border-border/60 rounded-xl text-foreground focus:border-indigo-500/80 focus:ring-1 focus:ring-indigo-500/30 outline-none transition placeholder:text-muted-foreground/40 text-sm"
+              placeholder="you@example.com"
+            />
+          </div>
+        </motion.div>
 
-        <Button type="submit" loading={loading} className="w-full">
-          Send Reset Link
-        </Button>
+        {/* Submit */}
+        <motion.div variants={itemVariants} className="pt-2">
+          <Button 
+            type="submit" 
+            loading={loading} 
+            className="group w-full py-2.5 btn-shiny rounded-xl cursor-pointer text-sm flex items-center justify-center gap-2 font-semibold"
+          >
+            Send Reset Link <ArrowRight size={14} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+          </Button>
+        </motion.div>
       </form>
 
-      <p className="mt-4 text-center text-sm text-[var(--color-zrho-text-muted)]">
-        <Link to="/login" className="text-[var(--color-zrho-accent)] hover:underline">
+      {/* Footer Navigation */}
+      <motion.div variants={itemVariants} className="mt-5 text-center text-xs text-muted-foreground">
+        <Link to="/login" className="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors font-medium">
           Back to Sign In
         </Link>
-      </p>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
