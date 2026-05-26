@@ -4,7 +4,7 @@
 // utilization, billing cycles, due date logic
 // ============================================================
 
-import { addMonths, format, startOfMonth } from 'date-fns';
+import { addMonths, format, startOfMonth, parseISO } from 'date-fns';
 import type { Loan, LoanPayment } from '@/types/database.types';
 import type { AmortizationRow, LoanStats, PrepaymentImpact } from '@/types/loan.types';
 
@@ -64,32 +64,50 @@ export function generateAmortizationSchedule(
   const today = new Date();
   const currentMonth = format(startOfMonth(today), 'yyyy-MM-dd');
 
-  // Build a set of paid emi_months for quick lookup
-  const paidMonths = new Map<string, LoanPayment>();
-  for (const p of payments) {
-    if (!p.is_prepayment) {
-      paidMonths.set(p.emi_month, p);
-    }
+  let activeEmi = emi;
+  if (!activeEmi || activeEmi <= 0) {
+    activeEmi = calculateEMI(principal, annualRate, tenureMonths);
   }
 
   for (let i = 0; i < tenureMonths; i++) {
     const monthDate = addMonths(start, i);
     const monthStr = format(startOfMonth(monthDate), 'yyyy-MM-dd');
 
-    const interestComponent = round2(outstanding * r);
-    let principalComponent = round2(emi - interestComponent);
+    const isSettled = round2(outstanding) <= 0;
+    const interestComponent = isSettled ? 0 : round2(outstanding * r);
+    let principalComponent = isSettled ? 0 : round2(activeEmi - interestComponent);
+
+    if (isSettled) {
+      principalComponent = 0;
+    } else if (outstanding < principalComponent) {
+      principalComponent = outstanding;
+    }
 
     // Last month: adjust for rounding
-    if (i === tenureMonths - 1) {
+    if (i === tenureMonths - 1 && !isSettled) {
       principalComponent = round2(outstanding);
     }
 
-    outstanding = round2(Math.max(0, outstanding - principalComponent));
+    const currentEmiAmount = isSettled ? 0 : (i === tenureMonths - 1 ? round2(interestComponent + principalComponent) : activeEmi);
 
-    // Determine status
-    const payment = paidMonths.get(monthStr);
+    // Get all payments in this month (both regular and prepayments)
+    const monthPayments = payments.filter((p) => {
+      const pDate = p.payment_date || p.emi_month;
+      return format(startOfMonth(parseISO(pDate)), 'yyyy-MM-dd') === monthStr;
+    });
+
+    const regularPayment = monthPayments.find((p) => !p.is_prepayment);
+
+    let nextOutstanding = outstanding;
+    if (monthPayments.length > 0) {
+      nextOutstanding = Math.min(...monthPayments.map((p) => p.outstanding_after));
+    } else {
+      nextOutstanding = round2(Math.max(0, outstanding - principalComponent));
+    }
+
+    // Determine status: if regular payment was recorded, or if outstanding was already 0
     let status: AmortizationRow['status'] = 'upcoming';
-    if (payment) {
+    if (regularPayment || isSettled) {
       status = 'paid';
     } else if (monthStr === currentMonth) {
       status = 'current';
@@ -101,18 +119,15 @@ export function generateAmortizationSchedule(
     schedule.push({
       month: i + 1,
       date: monthStr,
-      emiAmount: i === tenureMonths - 1 ? round2(interestComponent + principalComponent) : emi,
-      principalComponent: payment ? payment.principal_component : principalComponent,
-      interestComponent: payment ? payment.interest_component : interestComponent,
-      outstandingBalance: payment ? payment.outstanding_after : outstanding,
+      emiAmount: regularPayment ? regularPayment.amount_paid : currentEmiAmount,
+      principalComponent: regularPayment ? regularPayment.principal_component : principalComponent,
+      interestComponent: regularPayment ? regularPayment.interest_component : interestComponent,
+      outstandingBalance: nextOutstanding,
       status,
-      paidDate: payment?.payment_date,
+      paidDate: regularPayment?.payment_date,
     });
 
-    // Use actual outstanding from payment if available
-    if (payment) {
-      outstanding = payment.outstanding_after;
-    }
+    outstanding = nextOutstanding;
   }
 
   return schedule;
@@ -130,7 +145,23 @@ export function calculateLoanStats(loan: Loan, payments: LoanPayment[]): LoanSta
   const allPayments = payments;
 
   const emisPaid = regularPayments.length;
-  const emisRemaining = Math.max(0, loan.tenure_months - emisPaid);
+
+  let activeEmi = loan.emi_amount;
+  if (!activeEmi || activeEmi <= 0) {
+    activeEmi = calculateEMI(loan.principal_amount, loan.interest_rate, loan.tenure_months);
+  }
+  
+  // Calculate emisRemaining dynamically based on remaining principal
+  const r = loan.interest_rate / 12 / 100;
+  let emisRemaining = Math.max(0, loan.tenure_months - emisPaid);
+  if (loan.current_outstanding <= 0 || loan.status === 'closed') {
+    emisRemaining = 0;
+  } else if (loan.current_outstanding > 0 && activeEmi > 0 && r > 0) {
+    const ratio = (loan.current_outstanding * r) / activeEmi;
+    if (ratio < 1) {
+      emisRemaining = Math.ceil(-Math.log(1 - ratio) / Math.log(1 + r));
+    }
+  }
 
   const percentPaid = loan.principal_amount > 0
     ? round2(((loan.principal_amount - loan.current_outstanding) / loan.principal_amount) * 100)
@@ -141,13 +172,12 @@ export function calculateLoanStats(loan: Loan, payments: LoanPayment[]): LoanSta
   );
 
   // Calculate remaining interest from current outstanding
-  const r = loan.interest_rate / 12 / 100;
   let remainingInterest = 0;
-  if (emisRemaining > 0 && loan.current_outstanding > 0) {
+  if (emisRemaining > 0 && loan.current_outstanding > 0 && r > 0 && activeEmi > 0) {
     let tempOutstanding = loan.current_outstanding;
     for (let i = 0; i < emisRemaining; i++) {
       const monthInterest = tempOutstanding * r;
-      const monthPrincipal = loan.emi_amount - monthInterest;
+      const monthPrincipal = activeEmi - monthInterest;
       remainingInterest += monthInterest;
       tempOutstanding = Math.max(0, tempOutstanding - monthPrincipal);
     }
@@ -195,11 +225,22 @@ export function calculatePrepaymentImpact(
   const newOutstanding = round2(currentOutstanding - prepaymentAmount);
   const r = annualRate / 12 / 100;
 
+  // Self-healing: if emi is 0 or less, approximate the EMI from outstanding over remaining months
+  let activeEmi = emi;
+  if (activeEmi <= 0 && currentOutstanding > 0 && r > 0 && currentRemainingMonths > 0) {
+    const powerTerm = Math.pow(1 + r, currentRemainingMonths);
+    activeEmi = round2((currentOutstanding * r * powerTerm) / (powerTerm - 1));
+  }
+  // Fallback to simple division if rate is 0
+  if (activeEmi <= 0 && currentOutstanding > 0 && currentRemainingMonths > 0) {
+    activeEmi = round2(currentOutstanding / currentRemainingMonths);
+  }
+
   // Calculate new tenure with same EMI
   let newTenure = 0;
-  if (newOutstanding > 0 && emi > 0 && r > 0) {
+  if (newOutstanding > 0 && activeEmi > 0 && r > 0) {
     // n = -log(1 - P*r/EMI) / log(1+r)
-    const ratio = (newOutstanding * r) / emi;
+    const ratio = (newOutstanding * r) / activeEmi;
     if (ratio < 1) {
       newTenure = Math.ceil(-Math.log(1 - ratio) / Math.log(1 + r));
     } else {
@@ -215,7 +256,7 @@ export function calculatePrepaymentImpact(
     for (let i = 0; i < currentRemainingMonths; i++) {
       const mi = temp * r;
       originalRemainingInterest += mi;
-      temp = Math.max(0, temp - (emi - mi));
+      temp = Math.max(0, temp - (activeEmi - mi));
     }
   }
 
@@ -226,7 +267,7 @@ export function calculatePrepaymentImpact(
     for (let i = 0; i < newTenure; i++) {
       const mi = temp * r;
       newRemainingInterest += mi;
-      temp = Math.max(0, temp - (emi - mi));
+      temp = Math.max(0, temp - (activeEmi - mi));
     }
   }
 

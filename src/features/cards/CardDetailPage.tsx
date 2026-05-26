@@ -1,6 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { CardNetworkLogo } from '@/components/shared/CardNetworkLogo';
+import { BankLogo } from '@/components/shared/BankLogo';
 import {
   ArrowLeft,
   Edit,
@@ -75,6 +79,9 @@ export function CardDetailPage() {
   const [activeTab, setActiveTab] = useState<CardTab>('overview');
   const [showAddTx, setShowAddTx] = useState(false);
   const [showPayBill, setShowPayBill] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showStatusConfirm, setShowStatusConfirm] = useState(false);
+  const [txToDelete, setTxToDelete] = useState<string | null>(null);
 
   // Calculate Balances & Ratios
   const currentBalance = useMemo(() => calculateCurrentBalance(transactions), [transactions]);
@@ -157,23 +164,32 @@ export function CardDetailPage() {
 
   if (!card) return <div className="text-center py-12 text-destructive">Card not found</div>;
 
-  const handleDelete = async () => {
-    if (confirm('Delete this card and all associated transactions? This action is permanent.')) {
-      await deleteCard.mutateAsync(card.id);
-      navigate('/cards');
-    }
+  const handleDelete = () => {
+    setShowDeleteConfirm(true);
   };
 
-  const handleToggleStatus = async () => {
+  const handleDeleteConfirm = async () => {
+    await deleteCard.mutateAsync(card.id);
+    navigate('/cards');
+  };
+
+  const handleToggleStatus = () => {
+    setShowStatusConfirm(true);
+  };
+
+  const handleToggleStatusConfirm = async () => {
     const nextStatus = card.status === 'active' ? 'closed' : 'active';
-    if (confirm(`Are you sure you want to mark this card as ${nextStatus}?`)) {
-      await updateCard.mutateAsync({ id: card.id, status: nextStatus });
-    }
+    await updateCard.mutateAsync({ id: card.id, status: nextStatus });
   };
 
-  const handleDeleteTransaction = async (txId: string) => {
-    if (confirm('Delete this transaction entry? Card balance will auto-recalculate.')) {
-      await deleteTx.mutateAsync({ id: txId, card_id: card.id });
+  const handleDeleteTransaction = (txId: string) => {
+    setTxToDelete(txId);
+  };
+
+  const handleDeleteTxConfirm = async () => {
+    if (txToDelete) {
+      await deleteTx.mutateAsync({ id: txToDelete, card_id: card.id });
+      setTxToDelete(null);
     }
   };
 
@@ -212,21 +228,29 @@ export function CardDetailPage() {
 
       {/* Credit Card Physical Visualization Frame */}
       <div
-        className="relative overflow-hidden rounded-3xl p-6 min-h-[220px] flex flex-col justify-between shadow-2xl border border-white/5"
+        className="relative overflow-hidden rounded-3xl p-6 min-h-[220px] flex flex-col justify-between shadow-2xl border border-white/10"
         style={{
-          background: `radial-gradient(130% 70% at 0% 0%, ${card.color} 30%, ${card.color}aa 100%)`,
+          background: `linear-gradient(135deg, ${card.color} 0%, color-mix(in oklab, ${card.color} 45%, black) 100%)`,
         }}
       >
-        <div className="pointer-events-none absolute inset-0 opacity-40 bg-gradient-to-br from-white/10 to-transparent" />
+        {/* Light sheen layer reflection */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
 
-        <div className="relative flex items-center justify-between text-white">
-          <div>
-            <div className="text-lg font-bold tracking-wide">{card.name}</div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-white/60">
-              {card.bank} · {CARD_NETWORK_LABELS[card.card_network]}
+        <div className="relative flex items-center justify-between text-white z-10">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-white/10 backdrop-blur border border-white/15 flex items-center justify-center shrink-0">
+              <BankLogo bankName={card.bank} size={20} className="text-white" />
+            </div>
+            <div>
+              <div className="text-sm font-bold tracking-wide leading-tight">{card.name}</div>
+              <div className="text-[10px] uppercase tracking-widest opacity-75 font-semibold font-sans leading-none mt-1">
+                {card.bank}
+              </div>
             </div>
           </div>
-          <span className="text-2xl font-semibold opacity-30">ρ</span>
+          <div className="bg-white/10 backdrop-blur border border-white/15 px-3.5 py-2 rounded-xl flex items-center justify-center shrink-0">
+            <CardNetworkLogo network={card.card_network} size={20} className="text-white" />
+          </div>
         </div>
 
         <div className="relative flex items-end justify-between text-white mt-8">
@@ -565,6 +589,36 @@ export function CardDetailPage() {
         )}
       </AnimatePresence>
 
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Credit Card"
+        message="Are you sure you want to delete this credit card and all associated transaction records? This action is permanent and cannot be undone."
+        confirmText="Delete permanently"
+        variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={showStatusConfirm}
+        onClose={() => setShowStatusConfirm(false)}
+        onConfirm={handleToggleStatusConfirm}
+        title={card.status === 'active' ? 'Freeze Card' : 'Unfreeze Card'}
+        message={`Are you sure you want to mark this card as ${card.status === 'active' ? 'closed' : 'active'}?`}
+        confirmText={card.status === 'active' ? 'Freeze' : 'Activate'}
+        variant={card.status === 'active' ? 'warning' : 'success'}
+      />
+
+      <ConfirmModal
+        isOpen={txToDelete !== null}
+        onClose={() => setTxToDelete(null)}
+        onConfirm={handleDeleteTxConfirm}
+        title="Delete Transaction"
+        message="Are you sure you want to delete this transaction entry? The credit card outstanding balance will automatically recalculate."
+        confirmText="Delete"
+        variant="danger"
+      />
+
     </div>
   );
 }
@@ -715,18 +769,12 @@ function AddTxDialog({ card, onClose, statementDay }: { card: any; onClose: () =
 
           {/* Note & Date Fields side-by-side */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-border bg-background p-3.5">
-              <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
-                Transaction Date
-              </label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-transparent text-xs outline-none text-foreground"
-              />
-            </div>
-            <div className="rounded-2xl border border-border bg-background p-3.5">
+            <DatePicker
+              label="Transaction Date"
+              value={date}
+              onChange={setDate}
+            />
+            <div className="rounded-2xl border border-border bg-background p-3.5 flex flex-col justify-center">
               <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
                 Short Notes
               </label>
@@ -803,17 +851,11 @@ function PayBillDialog({ card, bill, onClose, onConfirm }: { card: any; bill: an
           </div>
 
           {/* Payment Date */}
-          <div className="rounded-2xl border border-border bg-background p-3.5">
-            <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
-              Payment Record Date
-            </label>
-            <input
-              type="date"
-              value={payDate}
-              onChange={(e) => setPayDate(e.target.value)}
-              className="w-full bg-transparent text-sm outline-none text-foreground"
-            />
-          </div>
+          <DatePicker
+            label="Payment Record Date"
+            value={payDate}
+            onChange={setPayDate}
+          />
         </div>
 
         <button

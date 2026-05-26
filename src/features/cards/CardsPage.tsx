@@ -136,10 +136,16 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
 
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      transition={{ delay: index * 0.05 }}
+      transition={{
+        type: 'spring',
+        stiffness: 380,
+        damping: 34,
+        opacity: { duration: 0.2 }
+      }}
     >
       <Link
         to={`/cards/${card.id}`}

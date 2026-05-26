@@ -81,12 +81,10 @@ export function useCreateLoan() {
     }) => {
       if (!user) throw new Error('Not authenticated');
 
-      // Auto-calculate EMI if not provided
-      const emi = input.emi_amount ?? calculateEMI(
-        input.principal_amount,
-        input.interest_rate,
-        input.tenure_months
-      );
+      // Auto-calculate EMI if not provided or if coerced to 0/empty
+      const emi = (input.emi_amount && input.emi_amount > 0)
+        ? input.emi_amount
+        : calculateEMI(input.principal_amount, input.interest_rate, input.tenure_months);
 
       const totalInterest = calculateTotalInterest(
         input.principal_amount,
@@ -137,6 +135,29 @@ export function useUpdateLoan() {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: LoanUpdate & { id: string }) => {
+      // Auto-calculate EMI on update if it is set to 0/empty
+      if (updates.emi_amount !== undefined && updates.emi_amount <= 0) {
+        const principal = updates.principal_amount;
+        const rate = updates.interest_rate;
+        const tenure = updates.tenure_months;
+        if (principal !== undefined && rate !== undefined && tenure !== undefined) {
+          updates.emi_amount = calculateEMI(principal, rate, tenure);
+        } else {
+          const { data: currentLoan } = await supabase
+            .from('loans')
+            .select('principal_amount, interest_rate, tenure_months')
+            .eq('id', id)
+            .single();
+          if (currentLoan) {
+            updates.emi_amount = calculateEMI(
+              principal ?? currentLoan.principal_amount,
+              rate ?? currentLoan.interest_rate,
+              tenure ?? currentLoan.tenure_months
+            );
+          }
+        }
+      }
+
       const { data, error } = await supabase
         .from('loans')
         .update(updates)

@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { DatePicker } from '@/components/ui/DatePicker';
 import {
   ArrowLeft,
   Edit,
@@ -27,6 +29,7 @@ import {
   calculatePrepaymentImpact,
   getNextEMIDate,
   getDueInfo,
+  calculateEMI,
 } from '@/lib/calculations';
 import { formatCurrency, formatCompactCurrency } from '@/lib/currency';
 
@@ -56,6 +59,8 @@ export function LoanDetailPage() {
   const [activeTab, setActiveTab] = useState<LoanTab>('summary');
   const [showPayEMI, setShowPayEMI] = useState(false);
   const [showPrepay, setShowPrepay] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showStatusConfirm, setShowStatusConfirm] = useState(false);
 
   // Math Schedule & Stats
   const schedule = useMemo(() => {
@@ -84,6 +89,10 @@ export function LoanDetailPage() {
   const prepayScenarios = useMemo(() => {
     if (!loan || !stats) return [];
     
+    const activeEmi = (loan.emi_amount && loan.emi_amount > 0)
+      ? loan.emi_amount
+      : calculateEMI(loan.principal_amount, loan.interest_rate, loan.tenure_months);
+
     // Scenarios based on currency
     const opts = [
       { label: '+5K / mo', extra: loan.currency === 'INR' ? 5000 : 50 },
@@ -95,7 +104,7 @@ export function LoanDetailPage() {
       const impact = calculatePrepaymentImpact(
         loan.current_outstanding,
         loan.interest_rate,
-        loan.emi_amount,
+        activeEmi,
         opt.extra,
         stats.emisRemaining
       );
@@ -123,18 +132,22 @@ export function LoanDetailPage() {
 
   if (!loan || !stats) return <div className="text-center py-12 text-destructive">Loan not found</div>;
 
-  const handleDelete = async () => {
-    if (confirm('Delete this loan profile and all associated repayment history? This is permanent.')) {
-      await deleteLoan.mutateAsync(loan.id);
-      navigate('/loans');
-    }
+  const handleDelete = () => {
+    setShowDeleteConfirm(true);
   };
 
-  const handleToggleStatus = async () => {
+  const handleDeleteConfirm = async () => {
+    await deleteLoan.mutateAsync(loan.id);
+    navigate('/loans');
+  };
+
+  const handleToggleStatus = () => {
+    setShowStatusConfirm(true);
+  };
+
+  const handleToggleStatusConfirm = async () => {
     const nextStatus = loan.status === 'active' ? 'closed' : 'active';
-    if (confirm(`Are you sure you want to mark this loan as ${nextStatus}?`)) {
-      await updateLoan.mutateAsync({ id: loan.id, status: nextStatus });
-    }
+    await updateLoan.mutateAsync({ id: loan.id, status: nextStatus });
   };
 
   // Completed payments calculations
@@ -523,6 +536,26 @@ export function LoanDetailPage() {
         )}
       </AnimatePresence>
 
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Loan Profile"
+        message="Are you sure you want to delete this loan profile and all associated repayment history? This is permanent and cannot be undone."
+        confirmText="Delete permanently"
+        variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={showStatusConfirm}
+        onClose={() => setShowStatusConfirm(false)}
+        onConfirm={handleToggleStatusConfirm}
+        title={loan.status === 'active' ? 'Archive Loan' : 'Unarchive Loan'}
+        message={`Are you sure you want to mark this loan as ${loan.status === 'active' ? 'closed' : 'active'}?`}
+        confirmText={loan.status === 'active' ? 'Archive' : 'Activate'}
+        variant={loan.status === 'active' ? 'warning' : 'success'}
+      />
+
     </div>
   );
 }
@@ -571,19 +604,23 @@ function PayEMIDialog({
 
   const extraVal = extraOn ? parseFloat(extraStr.replace(/,/g, '')) || 0 : 0;
 
+  const activeEmi = (loan.emi_amount && loan.emi_amount > 0)
+    ? loan.emi_amount
+    : calculateEMI(loan.principal_amount, loan.interest_rate, loan.tenure_months);
+
   // Real prepay impact calculation inside log sheet
   const sim = useMemo(() => {
     const baseline = calculatePrepaymentImpact(
       loan.current_outstanding,
       loan.interest_rate,
-      loan.emi_amount,
+      activeEmi,
       0,
       12 // placeholder
     );
     const withExtra = calculatePrepaymentImpact(
       loan.current_outstanding,
       loan.interest_rate,
-      loan.emi_amount,
+      activeEmi,
       extraVal,
       12
     );
@@ -591,7 +628,7 @@ function PayEMIDialog({
       monthsSaved: baseline.monthsSaved - withExtra.monthsSaved, // approximate
       interestSaved: Math.max(0, baseline.interestSaved - withExtra.interestSaved),
     };
-  }, [extraVal, loan]);
+  }, [extraVal, loan, activeEmi]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
@@ -630,18 +667,12 @@ function PayEMIDialog({
 
           {/* Payment Date Input */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-border bg-background p-3.5">
-              <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
-                Record Payment Date
-              </label>
-              <input
-                type="date"
-                value={payDate}
-                onChange={(e) => setPayDate(e.target.value)}
-                className="w-full bg-transparent text-xs outline-none text-foreground"
-              />
-            </div>
-            <div className="rounded-2xl border border-border bg-background p-3.5">
+            <DatePicker
+              label="Record Payment Date"
+              value={payDate}
+              onChange={setPayDate}
+            />
+            <div className="rounded-2xl border border-border bg-background p-3.5 flex flex-col justify-center">
               <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
                 Short Notes
               </label>
@@ -717,16 +748,20 @@ function PrepayDialog({
   onClose: () => void;
   onConfirm: (amt: number, type: 'part_prepayment' | 'full_closure', date: string, notes: string) => void;
 }) {
-  const [prepayAmt, setPrepayAmt] = useState(loan.currency === 'INR' ? '25,000' : '500');
+  const [prepayAmt, setPrepayAmt] = useState(loan.currency === 'INR' ? '25000' : '500');
   const [type, setType] = useState<'part_prepayment' | 'full_closure'>('part_prepayment');
   const [payDate, setPayDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [notes, setNotes] = useState('');
 
-  const numericPrepay = parseFloat(prepayAmt.replace(/,/g, '')) || 0;
+  const numericPrepay = parseFloat(prepayAmt) || 0;
   const isFullClosure = type === 'full_closure';
 
   // Automatically set prepayment amount to current outstanding if full closure
   const finalPrepayAmt = isFullClosure ? loan.current_outstanding : numericPrepay;
+
+  const activeEmi = (loan.emi_amount && loan.emi_amount > 0)
+    ? loan.emi_amount
+    : calculateEMI(loan.principal_amount, loan.interest_rate, loan.tenure_months);
 
   // Real prepayment impact calculation inside prepay modal
   const sim = useMemo(() => {
@@ -734,11 +769,11 @@ function PrepayDialog({
     return calculatePrepaymentImpact(
       loan.current_outstanding,
       loan.interest_rate,
-      loan.emi_amount,
+      activeEmi,
       finalPrepayAmt,
       stats.emisRemaining
     );
-  }, [finalPrepayAmt, isFullClosure, loan, stats]);
+  }, [finalPrepayAmt, isFullClosure, loan, stats, activeEmi]);
 
   const valid = finalPrepayAmt > 0 && finalPrepayAmt <= loan.current_outstanding;
 
@@ -792,8 +827,8 @@ function PrepayDialog({
               <span className="text-muted-foreground font-semibold">{loan.currency}</span>
               <input
                 disabled={isFullClosure}
-                type="text"
-                value={isFullClosure ? loan.current_outstanding.toLocaleString() : prepayAmt}
+                type="number"
+                value={isFullClosure ? loan.current_outstanding : prepayAmt}
                 onChange={(e) => setPrepayAmt(e.target.value)}
                 className="w-full bg-transparent text-2xl font-bold tabular outline-none text-foreground placeholder:text-muted-foreground/30 disabled:opacity-75"
               />
@@ -822,18 +857,12 @@ function PrepayDialog({
 
           {/* Record payment date & notes */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-border bg-background p-3.5">
-              <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
-                Prepayment Record Date
-              </label>
-              <input
-                type="date"
-                value={payDate}
-                onChange={(e) => setPayDate(e.target.value)}
-                className="w-full bg-transparent text-xs outline-none text-foreground"
-              />
-            </div>
-            <div className="rounded-2xl border border-border bg-background p-3.5">
+            <DatePicker
+              label="Prepayment Record Date"
+              value={payDate}
+              onChange={setPayDate}
+            />
+            <div className="rounded-2xl border border-border bg-background p-3.5 flex flex-col justify-center">
               <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
                 Short Notes
               </label>

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { useMarkBillPaid } from '@/hooks/useBills';
 import { formatCurrency } from '@/lib/currency';
 import { format } from 'date-fns';
+import { DatePicker } from '@/components/ui/DatePicker';
 
 interface MarkBillPaidModalProps {
   isOpen: boolean;
@@ -90,10 +91,11 @@ export function MarkBillPaidModal({
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm text-[var(--color-zrho-text-muted)] mb-1">Payment Date</label>
-          <input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} className={inputClass} />
-        </div>
+        <DatePicker
+          label="Payment Date"
+          value={paidDate}
+          onChange={setPaidDate}
+        />
 
         <div className="flex gap-3 pt-2">
           <Button onClick={handleSubmit} loading={markPaid.isPending} className="flex-1">

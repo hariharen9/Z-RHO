@@ -27,6 +27,15 @@ A sleek, robust, full-stack personal debt tracking Progressive Web App (PWA). Bu
 - **Transaction Ledger:** Record both debits and credits with categorical tracking.
 - **Bill Status Management:** Seamlessly track generated, paid, upcoming, or overdue credit card bills.
 
+### 🎨 Custom Component Suite & Visual Aesthetics
+- **Dynamic Vector Branding:** Dynamically parses and renders pixel-perfect SVGs for major bank systems (Chase, SBI, HDFC, ICICI, Citi, HSBC) and card network processors (Visa, Mastercard, Amex, RuPay) inside floating glass panels.
+- **Interactive Preset Swatches:** Completely replaced standard color-pickers with a beautiful grid of **10 curated preset gradient swatches** (Indigo Royale, Sunset Amber, Carbon Obsidian, Midnight Cyber, etc.) that let users instantly color cards, automatically styling the dynamic submit buttons in real-time.
+- **Bespoke UI Components:**
+  - *`<Dropdown>`:* Uses Framer Motion for a custom, glassmorphic select list with responsive spring animations and active state highlights.
+  - *`<DatePicker>`:* A fully bespoke datepicker featuring month-over-month chevron navigation, active select styling, today indicators, and click-outside self-closers.
+  - *`<ConfirmModal>`:* Unified all deletion and freezing dialogues into sleek, semantic custom modals, discarding raw browser `confirm()` prompts.
+- **Frictionless Grid Re-ordering:** Cards and loans filter transitions slide and align with smooth Framer Motion layout animations, completely eliminating layout jitter.
+
 ### ⚙️ Settings & Core
 - **Multi-Currency System:** Choose a default currency (INR, USD, EUR, etc.) and watch all dashboard metrics auto-convert.
 - **Dynamic Theme System:** Smooth transitions between Light, Dark, and System modes.
