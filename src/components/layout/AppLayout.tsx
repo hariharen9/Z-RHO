@@ -82,8 +82,8 @@ export function AppLayout() {
         {/* Mobile Header Bar */}
         <header className="flex items-center justify-between px-5 pb-4 pt-6 lg:hidden shrink-0 border-b border-border/40 bg-background/50 backdrop-blur-xl">
           <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-surface">
-              <span className="text-lg font-semibold leading-none text-foreground">ρ</span>
+            <div className="h-8 w-8 overflow-hidden rounded-xl border border-border bg-surface">
+              <img src="/zrho.png" alt="Z-RHO Logo" className="h-full w-full object-cover" />
             </div>
             <div>
               <div className="text-sm font-semibold tracking-[0.2em] text-foreground">Z-RHO</div>

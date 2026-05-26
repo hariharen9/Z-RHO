@@ -31,8 +31,8 @@ export function Sidebar() {
     <aside className="sticky top-0 z-30 flex h-[100dvh] w-64 flex-col border-r border-border bg-surface/40 backdrop-blur-xl max-lg:hidden">
       {/* Brand Logo Header */}
       <div className="flex items-center gap-3 px-6 pt-7">
-        <div className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-background">
-          <span className="text-lg font-semibold leading-none text-foreground">ρ</span>
+        <div className="h-9 w-9 overflow-hidden rounded-xl border border-border bg-background">
+          <img src="/zrho.png" alt="Z-RHO Logo" className="h-full w-full object-cover" />
         </div>
         <div>
           <div className="text-sm font-semibold tracking-[0.22em] text-foreground">Z-RHO</div>
