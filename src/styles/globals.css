@@ -179,6 +179,11 @@
       radial-gradient(120% 60% at 0% 0%, color-mix(in oklab, white 10%, transparent) 0%, transparent 60%),
       linear-gradient(145deg, oklch(0.22 0 0) 0%, oklch(0.13 0 0) 100%);
   }
+  .light .card-shine {
+    background:
+      radial-gradient(120% 60% at 0% 0%, color-mix(in oklab, white 60%, transparent) 0%, transparent 60%),
+      linear-gradient(145deg, oklch(0.97 0 0) 0%, oklch(0.91 0 0) 100%);
+  }
   .ring-success { box-shadow: 0 0 0 1px color-mix(in oklab, var(--success) 60%, transparent); }
   .text-success { color: var(--color-success); }
   .text-warning { color: var(--color-warning); }

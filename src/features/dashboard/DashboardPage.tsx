@@ -10,11 +10,8 @@ import {
   Flame,
   ArrowUpRight,
   AlertTriangle,
-  ChevronRight,
-  Landmark,
-  CreditCard,
 } from 'lucide-react';
-import { differenceInDays, format, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 
 // Hooks
 import { useProfile } from '@/hooks/useProfile';
@@ -55,7 +52,7 @@ export function DashboardPage() {
 
   // Live Queries
   const { data: stats, isLoading: statsLoading } = useDashboardStats(currency);
-  const { data: upcoming = [], isLoading: upcomingLoading } = useUpcomingPayments();
+  const { data: upcoming = [] } = useUpcomingPayments();
   const { data: loans = [], isLoading: loansLoading } = useLoans('active');
   const { data: cards = [], isLoading: cardsLoading } = useCards('active');
   const { data: debtHistory = [], isLoading: historyLoading } = useDebtHistory();
@@ -312,80 +309,83 @@ export function DashboardPage() {
           </div>
         </section>
 
-        {/* Chronological Timeline Dues */}
-        <section className="col-span-12 rounded-3xl border border-border bg-surface p-6 xl:col-span-4 flex flex-col justify-between">
-          <div>
-            <header className="flex items-center justify-between border-b border-border/40 pb-3">
-              <h2 className="text-sm font-semibold">Next 30 Days</h2>
-              <span className="text-xs text-muted-foreground tabular">
-                {formatCurrency(totalUpcomingSum, currency)} due
-              </span>
-            </header>
+        {/* Right column: Quick Log Spend & Timeline */}
+        <div className="col-span-12 xl:col-span-4 flex flex-col gap-4">
+          {/* Chronological Timeline Dues */}
+          <section className="rounded-3xl border border-border bg-surface p-6 flex flex-col justify-between flex-1">
+            <div>
+              <header className="flex items-center justify-between border-b border-border/40 pb-3">
+                <h2 className="text-sm font-semibold">Next 30 Days</h2>
+                <span className="text-xs text-muted-foreground tabular">
+                  {formatCurrency(totalUpcomingSum, currency)} due
+                </span>
+              </header>
 
-            <div className="mt-4 space-y-3 max-h-[300px] overflow-y-auto pr-1">
-              {upcoming.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
-                  No dues found in next 30 days 🎉
-                </div>
-              )}
-              {upcoming.map((u, i) => {
-                const isOverdue = u.daysRemaining < 0;
-                const urgent = u.daysRemaining <= 3;
-                const dateParsed = u.dueDate ? parseISO(u.dueDate) : new Date();
+              <div className="mt-4 space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                {upcoming.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
+                    No dues found in next 30 days 🎉
+                  </div>
+                )}
+                {upcoming.map((u, i) => {
+                  const isOverdue = u.daysRemaining < 0;
+                  const urgent = u.daysRemaining <= 3;
+                  const dateParsed = u.dueDate ? parseISO(u.dueDate) : new Date();
 
-                return (
-                  <motion.div
-                    key={u.id}
-                    initial={{ opacity: 0, x: 8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.03 }}
-                    onClick={() => {
-                      if (u.type === 'loan') navigate(`/loans/${u.linkedId}`);
-                      else navigate(`/cards/${u.linkedId}`);
-                    }}
-                    className="group flex items-center gap-3 rounded-2xl border border-border bg-background p-3 transition hover:border-foreground/30 cursor-pointer"
-                  >
-                    {/* Calendar Tile */}
-                    <div
-                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border ${
-                        isOverdue || urgent
-                          ? 'border-destructive/40 bg-destructive/10 text-destructive'
-                          : 'border-border bg-surface text-muted-foreground'
-                      }`}
+                  return (
+                    <motion.div
+                      key={u.id}
+                      initial={{ opacity: 0, x: 8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.03 }}
+                      onClick={() => {
+                        if (u.type === 'loan') navigate(`/loans/${u.linkedId}`);
+                        else navigate(`/cards/${u.linkedId}`);
+                      }}
+                      className="group flex items-center gap-3 rounded-2xl border border-border bg-background p-3 transition hover:border-foreground/30 cursor-pointer"
                     >
-                      <div className="text-center">
-                        <div className="text-[9px] uppercase tracking-widest leading-none">
-                          {format(dateParsed, 'MMM')}
+                      {/* Calendar Tile */}
+                      <div
+                        className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border ${
+                          isOverdue || urgent
+                            ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                            : 'border-border bg-surface text-muted-foreground'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <div className="text-[9px] uppercase tracking-widest leading-none">
+                            {format(dateParsed, 'MMM')}
+                          </div>
+                          <div className="text-sm font-semibold tabular leading-none mt-0.5">
+                            {format(dateParsed, 'd')}
+                          </div>
                         </div>
-                        <div className="text-sm font-semibold tabular leading-none mt-0.5">
-                          {format(dateParsed, 'd')}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
+                          {u.name}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                          {u.type === 'loan' ? 'EMI' : 'Bill'} ·{' '}
+                          {isOverdue
+                            ? `${Math.abs(u.daysRemaining)}d overdue`
+                            : u.daysRemaining === 0
+                            ? 'Due today'
+                            : `${u.daysRemaining} days left`}
                         </div>
                       </div>
-                    </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-semibold text-foreground group-hover:text-primary transition-colors">
-                        {u.name}
+                      <div className="text-xs font-semibold tabular text-foreground">
+                        {formatCurrency(u.amount, u.currency)}
                       </div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">
-                        {u.type === 'loan' ? 'EMI' : 'Bill'} ·{' '}
-                        {isOverdue
-                          ? `${Math.abs(u.daysRemaining)}d overdue`
-                          : u.daysRemaining === 0
-                          ? 'Due today'
-                          : `${u.daysRemaining} days left`}
-                      </div>
-                    </div>
-
-                    <div className="text-xs font-semibold tabular text-foreground">
-                      {formatCurrency(u.amount, u.currency)}
-                    </div>
-                  </motion.div>
-                );
-              })}
+                    </motion.div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </div>
 
       {/* SECTION 3: RECHARTS & AVALANCHE CALCULATOR */}

@@ -1,33 +1,19 @@
-import { useState, useRef, useEffect } from 'react';
-import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { BottomTabBar } from './BottomTabBar';
-import { Bell, Plus, Search, Landmark, CreditCard, ChevronRight } from 'lucide-react';
+import { Bell, Plus, Search } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
-import { useAuthStore } from '@/store/authStore';
+import { AddCCTransactionModal } from '@/features/cards/AddCCTransactionModal';
 
 export function AppLayout() {
-  const navigate = useNavigate();
   const location = useLocation();
   const currentPath = location.pathname;
 
   const { data: profile } = useProfile();
   const currency = profile?.default_currency ?? 'INR';
-  const { signOut } = useAuthStore();
 
-  const [menuOpen, setMenuOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const [newTxOpen, setNewTxOpen] = useState(false);
 
   // Determine section label for breadcrumbs
   const getBreadcrumbs = () => {
@@ -74,38 +60,13 @@ export function AppLayout() {
               <Bell size={14} strokeWidth={1.75} />
             </button>
 
-            {/* Floating Dropdown Trigger for "New Entry" */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:opacity-90 active:scale-95"
-              >
-                <Plus size={12} /> New entry
-              </button>
-
-              {menuOpen && (
-                <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-border bg-surface p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-200">
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      navigate('/loans/new');
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs text-foreground transition hover:bg-surface-elevated"
-                  >
-                    <Landmark size={14} className="text-warning" /> Add New Loan
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      navigate('/cards/new');
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs text-foreground transition hover:bg-surface-elevated"
-                  >
-                    <CreditCard size={14} className="text-info" /> Add Credit Card
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* New Entry - opens CC Transaction Modal */}
+            <button
+              onClick={() => setNewTxOpen(true)}
+              className="flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:opacity-90 active:scale-95"
+            >
+              <Plus size={12} /> New entry
+            </button>
 
             {/* User Profile Avatar with custom gradient */}
             <Link
@@ -158,6 +119,9 @@ export function AppLayout() {
 
       {/* Floating Bottom Tab Bar - Mobile */}
       <BottomTabBar />
+
+      {/* CC Transaction Modal */}
+      <AddCCTransactionModal isOpen={newTxOpen} onClose={() => setNewTxOpen(false)} />
     </div>
   );
 }
