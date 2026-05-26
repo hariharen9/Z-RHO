@@ -10,7 +10,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'icons/*.png'],
+      includeAssets: ['zrho.png', 'icons/*.png'],
       manifest: {
         name: 'ZRHO — Debt Manager',
         short_name: 'ZRHO',
