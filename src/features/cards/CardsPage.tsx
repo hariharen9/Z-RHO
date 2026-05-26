@@ -27,40 +27,50 @@ export function CardsPage() {
             {cards.length} {statusFilter ?? 'total'} active revolving assets
           </p>
         </div>
-        <Link to="/cards/new">
+        <Link to="/cards/new" className="md:hidden">
           <button className="rounded-full border border-border bg-surface p-3 transition hover:bg-surface-elevated active:scale-90 text-foreground">
             <Plus size={16} />
           </button>
         </Link>
       </div>
 
-      {/* Modern Filter Badges */}
-      <div className="flex gap-1 rounded-full border border-border bg-surface p-1 max-w-xs">
-        {([
-          { id: 'active', label: 'Active' },
-          { id: 'closed', label: 'Closed' },
-          { id: undefined, label: 'All' },
-        ] as { id: CardStatus | undefined; label: string }[]).map((tab) => {
-          const active = statusFilter === tab.id;
-          return (
-            <button
-              key={tab.label}
-              onClick={() => setStatusFilter(tab.id)}
-              className={`relative flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                active ? 'text-background' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {active && (
-                <motion.div
-                  layoutId="card-filter-pill"
-                  className="absolute inset-0 rounded-full bg-foreground"
-                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-                />
-              )}
-              <span className="relative z-10">{tab.label}</span>
-            </button>
-          );
-        })}
+      {/* Filter and Add Row */}
+      <div className="flex items-center justify-between gap-4">
+        {/* Modern Filter Badges */}
+        <div className="flex gap-1 rounded-full border border-border bg-surface p-1 max-w-xs flex-1 justify-between items-center">
+          {([
+            { id: 'active', label: 'Active' },
+            { id: 'closed', label: 'Closed' },
+            { id: undefined, label: 'All' },
+          ] as { id: CardStatus | undefined; label: string }[]).map((tab) => {
+            const active = statusFilter === tab.id;
+            return (
+              <button
+                key={tab.label}
+                onClick={() => setStatusFilter(tab.id)}
+                className={`relative flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                  active ? 'text-background font-semibold' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {active && (
+                  <motion.div
+                    layoutId="card-filter-pill"
+                    className="absolute inset-0 rounded-full bg-foreground"
+                    transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                  />
+                )}
+                <span className="relative z-10">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Desktop add button, aligned right */}
+        <Link to="/cards/new" className="max-md:hidden">
+          <button className="flex items-center gap-1.5 rounded-full bg-foreground px-4.5 py-2.5 text-xs font-bold text-background transition hover:opacity-90 active:scale-95 cursor-pointer">
+            <Plus size={13} /> Add new card
+          </button>
+        </Link>
       </div>
 
       {/* Loading States */}
