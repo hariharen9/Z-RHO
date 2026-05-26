@@ -70,11 +70,8 @@ export function useDeleteAccount() {
 
   return useMutation({
     mutationFn: async () => {
-      // Supabase handles cascade deletes via FK relationships
-      // We just need to delete the user from auth
-      // Note: This requires admin privileges or a server function
-      // For now, we sign out and let the user delete from Supabase dashboard
-      // In production, this would call an Edge Function
+      const { error } = await supabase.rpc('delete_account');
+      if (error) throw error;
       await signOut();
     },
   });
