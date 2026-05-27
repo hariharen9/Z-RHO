@@ -24,7 +24,8 @@ import { useTransactions } from '@/hooks/useTransactions';
 import { useCard } from '@/hooks/useCards';
 import { MarkBillPaidModal } from './MarkBillPaidModal';
 import { formatCurrency } from '@/lib/currency';
-import { format, parseISO, differenceInDays } from 'date-fns';
+import { calculateDaysRemaining } from '@/lib/calculations';
+import { format, parseISO } from 'date-fns';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 
 const CATEGORY_ICONS: Record<string, any> = {
@@ -80,7 +81,7 @@ export function BillDetailPage() {
   const isPaid = bill?.status === 'paid';
   const daysToDue = useMemo(() => {
     if (!bill) return 0;
-    return differenceInDays(parseISO(bill.due_date), new Date());
+    return calculateDaysRemaining(bill.due_date);
   }, [bill]);
 
   if (billLoading || cardLoading) {
@@ -139,7 +140,9 @@ export function BillDetailPage() {
             {formatCurrency(bill.statement_amount, card.currency)}
           </div>
           <div className="text-[9px] text-muted-foreground mt-1">
-            Generated: {format(parseISO(bill.statement_date), 'd MMM yyyy')}
+            {bill.statement_date
+              ? `Generated: ${format(parseISO(bill.statement_date), 'd MMM yyyy')}`
+              : 'Pending generation'}
           </div>
         </div>
 
@@ -150,7 +153,7 @@ export function BillDetailPage() {
             {formatCurrency(bill.minimum_due, card.currency)}
           </div>
           <div className="text-[9px] text-muted-foreground mt-1">
-            5% of total statement statement
+            5% of total statement
           </div>
         </div>
 
@@ -179,7 +182,9 @@ export function BillDetailPage() {
             )}
           </div>
           <div className="text-[9px] text-muted-foreground mt-1">
-            Due date: {format(parseISO(bill.due_date), 'd MMM yyyy')}
+            {bill.due_date
+              ? `Due date: ${format(parseISO(bill.due_date), 'd MMM yyyy')}`
+              : 'Due date not set'}
           </div>
         </div>
 
@@ -244,7 +249,7 @@ export function BillDetailPage() {
           <LayoutGroup>
             <AnimatePresence mode="popLayout">
               {transactions.map((t) => {
-                const branding = getMerchantBranding(t.merchant);
+                const branding = getMerchantBranding(t.merchant || undefined);
                 const Icon = branding?.icon ?? (CATEGORY_ICONS[t.category] ?? MoreHorizontal);
                 const isDebit = t.transaction_type === 'debit';
                 
@@ -307,6 +312,7 @@ export function BillDetailPage() {
           statementAmount={bill.statement_amount}
           minimumDue={bill.minimum_due}
           currency={card.currency}
+          billingMonth={bill.billing_month}
         />
       )}
 

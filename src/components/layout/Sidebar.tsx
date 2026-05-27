@@ -34,9 +34,18 @@ export function Sidebar() {
         <div className="h-9 w-9 overflow-hidden rounded-xl border border-border bg-background">
           <img src="/zrho.png" alt="Z-RHO Logo" className="h-full w-full object-cover" />
         </div>
-        <div>
+        <div className="relative group cursor-default">
           <div className="text-sm font-semibold tracking-[0.22em] text-foreground">Z-RHO</div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Liability engine</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Know your money</div>
+          {/* Name tooltip */}
+          <div className="pointer-events-none absolute left-0 top-full mt-2 w-56 rounded-xl border border-border bg-surface shadow-2xl p-3 text-[10px] leading-relaxed text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+            <span className="text-foreground font-bold tracking-widest text-[11px]">Z-RHO</span> is a word play on
+            {" "}<span className="text-foreground font-semibold">ZERO</span> — ground-zero awareness of your finances.
+            <div className="mt-1.5 pt-1.5 border-t border-border/60">
+              <span className="text-foreground font-semibold">ρ (Rho)</span> is the Greek symbol for
+              {" "}density &amp; correlation — used in finance to measure risk relationships.
+            </div>
+          </div>
         </div>
       </div>
 

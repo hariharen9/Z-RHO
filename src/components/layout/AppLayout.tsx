@@ -188,12 +188,21 @@ export function AppLayout() {
             <div className="h-8 w-8 overflow-hidden rounded-xl border border-border bg-surface">
               <img src="/zrho.png" alt="Z-RHO Logo" className="h-full w-full object-cover" />
             </div>
-            <div>
+            <div className="relative group cursor-default">
               <div className="text-sm font-semibold tracking-[0.2em] text-foreground">Z-RHO</div>
               <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-muted-foreground mt-0.5">
-                <span>Liability engine</span>
+                <span>Know your money</span>
                 <span>·</span>
                 <span className="font-mono font-semibold text-foreground/85">{liveTimeMobile}</span>
+              </div>
+              {/* Name tooltip — opens downward on mobile header */}
+              <div className="pointer-events-none absolute left-0 top-full mt-2 w-56 rounded-xl border border-border bg-surface shadow-2xl p-3 text-[10px] leading-relaxed text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+                <span className="text-foreground font-bold tracking-widest text-[11px]">Z-RHO</span> is a word play on
+                {" "}<span className="text-foreground font-semibold">ZERO</span> — ground-zero awareness of your finances.
+                <div className="mt-1.5 pt-1.5 border-t border-border/60">
+                  <span className="text-foreground font-semibold">ρ (Rho)</span> is the Greek symbol for
+                  {" "}density &amp; correlation — used in finance to measure risk relationships.
+                </div>
               </div>
             </div>
           </div>

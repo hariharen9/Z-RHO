@@ -92,7 +92,7 @@ export function CardDetailPage() {
   // Queries
   const { data: card, isLoading: cardLoading } = useCard(id);
   const { data: transactions = [] } = useAllCardTransactions(id);
-  const { data: bills = [] } = useBills(id);
+  const { data: bills = [], isLoading: billsLoading } = useBills(id);
 
   // Mutations
   const deleteCard = useDeleteCard();
@@ -117,6 +117,10 @@ export function CardDetailPage() {
   const cardRef = useRef<HTMLDivElement>(null);
   const [rotate, setRotate] = useState({ x: 0, y: 0 });
   const [glare, setGlare] = useState({ x: 50, y: 50, opacity: 0 });
+
+  // Stable ref so bills changes don't trigger sync re-run (prevents mutation loop)
+  const billsRef = useRef<typeof bills>([]);
+  useEffect(() => { billsRef.current = bills; });
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const cardElement = cardRef.current;
@@ -159,34 +163,39 @@ export function CardDetailPage() {
   }, [card, currentBalance]);
 
   // Automated Background statement synchronizer
+  // Uses billsRef (not bills state) so bill mutations don't re-trigger this effect
   useEffect(() => {
-    if (!card || transactions.length === 0) return;
+    // Wait for both queries to settle before syncing — prevents INSERT race condition
+    // when transactions loads before bills (would attempt to create already-existing bills)
+    if (!card || transactions.length === 0 || billsLoading) return;
+
+    let cancelled = false;
 
     const syncBills = async () => {
       try {
+        const currentBills = billsRef.current;
         const groups = new Map<string, { spends: number; credits: number }>();
-        
+
         for (const t of transactions) {
           const billingMonth = determineBillingMonth(t.transaction_date, card.statement_day);
-          
+
           if (!groups.has(billingMonth)) {
             groups.set(billingMonth, { spends: 0, credits: 0 });
           }
           const group = groups.get(billingMonth)!;
-          
+
           if (t.transaction_type === 'debit') {
             group.spends += t.amount;
           } else {
-            // Exclude statement payments to prevent mathematical loop count clumping
-            if (t.merchant?.toLowerCase().includes('statement payment')) {
-              continue;
-            }
+            // Exclude statement payments to prevent balance double-counting
+            if (t.merchant?.toLowerCase().includes('statement payment')) continue;
             group.credits += t.amount;
           }
         }
 
         for (const [billingMonth, data] of groups.entries()) {
-          const existingBill = bills.find((b) => b.billing_month === billingMonth);
+          if (cancelled) break;
+          const existingBill = currentBills.find((b) => b.billing_month === billingMonth);
           const statementAmount = Math.max(0, data.spends - data.credits);
           const minimumDue = Math.round(statementAmount * 0.05 * 100) / 100;
 
@@ -204,19 +213,25 @@ export function CardDetailPage() {
               status: statementAmount <= 0 ? 'paid' : 'generated',
             });
           } else {
-            const isPaid = existingBill.status === 'paid';
-            const nextStatus = isPaid ? 'paid' : (statementAmount <= 0 ? 'paid' : 'generated');
-            
+            // Protect paid/partially_paid bills — never regress their status
+            const isSettled = existingBill.status === 'paid' || existingBill.status === 'partially_paid';
+            const nextStatus = isSettled
+              ? existingBill.status
+              : statementAmount <= 0
+              ? 'paid'
+              : 'generated';
+
             const roundedSpends = Math.round(data.spends * 100) / 100;
             const roundedCredits = Math.round(data.credits * 100) / 100;
             const roundedStatement = Math.round(statementAmount * 100) / 100;
-            
-            if (
+
+            const amountsChanged =
               Math.abs(existingBill.total_spends - roundedSpends) > 0.01 ||
               Math.abs(existingBill.total_credits - roundedCredits) > 0.01 ||
-              Math.abs(existingBill.statement_amount - roundedStatement) > 0.01 ||
-              (existingBill.status !== nextStatus && !isPaid)
-            ) {
+              Math.abs(existingBill.statement_amount - roundedStatement) > 0.01;
+            const statusChanged = existingBill.status !== nextStatus && !isSettled;
+
+            if (amountsChanged || statusChanged) {
               await updateBill.mutateAsync({
                 bill_id: existingBill.id,
                 card_id: card.id,
@@ -230,12 +245,14 @@ export function CardDetailPage() {
           }
         }
       } catch (err) {
-        console.error('Failed to synchronize CC statements:', err);
+        if (!cancelled) console.error('Failed to synchronize CC statements:', err);
       }
     };
 
     syncBills();
-  }, [card, transactions, bills]);
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card, transactions, billsLoading]); // bills excluded (uses billsRef); billsLoading ensures both queries settled
 
   // Billing Cycle Computations
   const billingDates = useMemo(() => {
@@ -258,6 +275,16 @@ export function CardDetailPage() {
   const activeBill = useMemo(() => {
     return bills.find((b) => b.status !== 'paid');
   }, [bills]);
+
+  // Current billing month — used for "Current" badge in billing history
+  const currentBillingMonth = useMemo(() => {
+    if (!card) return null;
+    const now = new Date();
+    return format(
+      now.getDate() > card.statement_day ? startOfMonth(addMonths(now, 1)) : startOfMonth(now),
+      'yyyy-MM-dd'
+    );
+  }, [card]);
 
   // Compute spend analytics
   const insights = useMemo(() => {
@@ -492,9 +519,9 @@ export function CardDetailPage() {
       {/* Numerical Financial Summary Boxes */}
       <div className="grid grid-cols-3 gap-2">
         <MiniCard
-          label="Statement balance"
-          value={activeBill ? formatCurrency(activeBill.statement_amount, card.currency) : formatCurrency(0, card.currency)}
-          accent={activeBill && activeBill.statement_amount > 0}
+          label="Current Balance"
+          value={formatCurrency(Math.max(0, currentBalance), card.currency)}
+          accent={currentBalance > 0}
         />
         <MiniCard
           label="Available Limit"
@@ -593,6 +620,13 @@ export function CardDetailPage() {
                 <div className="divide-y divide-border/60">
                   {bills.map((bill) => {
                     const monthDate = bill.billing_month ? parseISO(bill.billing_month) : new Date();
+                    const isCurrentCycle = bill.billing_month === currentBillingMonth;
+                    const statusColor =
+                      bill.status === 'paid'
+                        ? 'text-success'
+                        : bill.status === 'partially_paid'
+                        ? 'text-warning'
+                        : 'text-orange-400';
                     return (
                       <Link
                         key={bill.id}
@@ -600,11 +634,18 @@ export function CardDetailPage() {
                         className="flex items-center justify-between px-5 py-3.5 hover:bg-surface-elevated transition-colors text-xs text-left block"
                       >
                         <div>
-                          <div className="font-semibold text-foreground">{format(monthDate, 'MMMM yyyy')}</div>
+                          <div className="font-semibold text-foreground flex items-center gap-2">
+                            {format(monthDate, 'MMMM yyyy')}
+                            {isCurrentCycle && (
+                              <span className="text-[8px] uppercase font-bold tracking-wider bg-foreground/10 text-foreground px-1.5 py-0.5 rounded-full">
+                                Current
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-muted-foreground mt-0.5">
-                            Due: {format(parseISO(bill.due_date), 'd MMM')} · status:{' '}
-                            <span className={bill.status === 'paid' ? 'text-success font-medium' : 'text-warning font-medium'}>
-                              {bill.status.replace('_', ' ')}
+                            {bill.due_date ? `Due: ${format(parseISO(bill.due_date), 'd MMM')} · ` : ''}
+                            <span className={`${statusColor} font-medium`}>
+                              {bill.status.replace(/_/g, ' ')}
                             </span>
                           </div>
                         </div>
@@ -612,7 +653,7 @@ export function CardDetailPage() {
                           <div className="font-semibold text-foreground">
                             {formatCurrency(bill.statement_amount, card.currency)}
                           </div>
-                          {bill.paid_amount && (
+                          {bill.paid_amount != null && bill.paid_amount > 0 && (
                             <div className="text-[10px] text-success mt-0.5">
                               Paid: {formatCurrency(bill.paid_amount, card.currency)}
                             </div>
@@ -622,8 +663,12 @@ export function CardDetailPage() {
                     );
                   })}
                   {bills.length === 0 && (
-                    <div className="p-6 text-center text-xs text-muted-foreground">
-                      No billing cycle reports generated yet.
+                    <div className="p-8 text-center space-y-2">
+                      <div className="text-2xl">📋</div>
+                      <div className="text-xs font-semibold text-foreground">No statements yet</div>
+                      <div className="text-[10px] text-muted-foreground max-w-[200px] mx-auto leading-relaxed">
+                        Add transactions above — billing cycles will be auto-generated from your spend history.
+                      </div>
                     </div>
                   )}
                 </div>
@@ -644,7 +689,7 @@ export function CardDetailPage() {
                 <LayoutGroup>
                   <AnimatePresence mode="popLayout">
                     {transactions.map((t) => {
-                      const branding = getMerchantBranding(t.merchant);
+                      const branding = getMerchantBranding(t.merchant || undefined);
                       const Icon = branding?.icon ?? (CATEGORY_ICONS[t.category] ?? MoreHorizontal);
                       const isDebit = t.transaction_type === 'debit';
                       return (

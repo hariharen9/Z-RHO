@@ -20,6 +20,7 @@ interface MarkBillPaidModalProps {
   statementAmount: number;
   minimumDue: number;
   currency: string;
+  billingMonth?: string; // e.g. "2026-05-01" — used for contextual transaction note
 }
 
 export function MarkBillPaidModal({
@@ -30,6 +31,7 @@ export function MarkBillPaidModal({
   statementAmount,
   minimumDue,
   currency,
+  billingMonth,
 }: MarkBillPaidModalProps) {
   const [paidAmount, setPaidAmount] = useState(String(statementAmount));
   const [paidDate, setPaidDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -53,13 +55,21 @@ export function MarkBillPaidModal({
 
     // 2. Automatically log a corresponding credit transaction in transactions
     if (card) {
+      const monthLabel = billingMonth
+        ? (() => {
+            try { return format(new Date(billingMonth), 'MMMM yyyy'); }
+            catch { return billingMonth; }
+          })()
+        : null;
       await createTx.mutateAsync({
         card_id: cardId,
         amount: amount,
         transaction_type: 'credit',
         category: 'Bills & Utilities',
         merchant: `Statement Payment — ${card.bank}`,
-        note: `Cleared statement bill cycle`,
+        note: monthLabel
+          ? `Cleared statement for ${monthLabel}`
+          : `Statement settlement`,
         transaction_date: paidDate,
         statement_day: card.statement_day,
       });
@@ -119,6 +129,7 @@ export function MarkBillPaidModal({
           label="Repayment Record Date"
           value={paidDate}
           onChange={setPaidDate}
+          dropUp
         />
 
         <div className="flex gap-3 pt-3 border-t border-border/30">
