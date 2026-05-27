@@ -60,7 +60,7 @@ export function generateAmortizationSchedule(
   const r = annualRate / 12 / 100;
   const schedule: AmortizationRow[] = [];
   let outstanding = principal;
-  const start = new Date(startDate);
+  const start = typeof startDate === 'string' ? parseISO(startDate) : new Date(startDate);
   const today = new Date();
   const currentMonth = format(startOfMonth(today), 'yyyy-MM-dd');
 
@@ -80,7 +80,7 @@ export function generateAmortizationSchedule(
     if (isSettled) {
       principalComponent = 0;
     } else if (outstanding < principalComponent) {
-      principalComponent = outstanding;
+      principalComponent = round2(outstanding);
     }
 
     // Last month: adjust for rounding
@@ -88,11 +88,11 @@ export function generateAmortizationSchedule(
       principalComponent = round2(outstanding);
     }
 
-    const currentEmiAmount = isSettled ? 0 : (i === tenureMonths - 1 ? round2(interestComponent + principalComponent) : activeEmi);
+    const currentEmiAmount = isSettled ? 0 : round2(interestComponent + principalComponent);
 
     // Get all payments in this month (both regular and prepayments)
     const monthPayments = payments.filter((p) => {
-      const pDate = p.payment_date || p.emi_month;
+      const pDate = p.is_prepayment ? p.payment_date : (p.emi_month || p.payment_date);
       return format(startOfMonth(parseISO(pDate)), 'yyyy-MM-dd') === monthStr;
     });
 
@@ -156,15 +156,19 @@ export function calculateLoanStats(loan: Loan, payments: LoanPayment[]): LoanSta
   let emisRemaining = Math.max(0, loan.tenure_months - emisPaid);
   if (loan.current_outstanding <= 0 || loan.status === 'closed') {
     emisRemaining = 0;
-  } else if (loan.current_outstanding > 0 && activeEmi > 0 && r > 0) {
-    const ratio = (loan.current_outstanding * r) / activeEmi;
-    if (ratio < 1) {
-      emisRemaining = Math.ceil(-Math.log(1 - ratio) / Math.log(1 + r));
+  } else if (loan.current_outstanding > 0 && activeEmi > 0) {
+    if (r > 0) {
+      const ratio = (loan.current_outstanding * r) / activeEmi;
+      if (ratio < 1) {
+        emisRemaining = Math.ceil(-Math.log(1 - ratio) / Math.log(1 + r));
+      }
+    } else {
+      emisRemaining = Math.ceil(loan.current_outstanding / activeEmi);
     }
   }
 
   const percentPaid = loan.principal_amount > 0
-    ? round2(((loan.principal_amount - loan.current_outstanding) / loan.principal_amount) * 100)
+    ? Math.min(100, round2(((loan.principal_amount - Math.max(0, loan.current_outstanding)) / loan.principal_amount) * 100))
     : 0;
 
   const totalInterestPaid = round2(
@@ -238,14 +242,18 @@ export function calculatePrepaymentImpact(
 
   // Calculate new tenure with same EMI
   let newTenure = 0;
-  if (newOutstanding > 0 && activeEmi > 0 && r > 0) {
-    // n = -log(1 - P*r/EMI) / log(1+r)
-    const ratio = (newOutstanding * r) / activeEmi;
-    if (ratio < 1) {
-      newTenure = Math.ceil(-Math.log(1 - ratio) / Math.log(1 + r));
+  if (newOutstanding > 0 && activeEmi > 0) {
+    if (r > 0) {
+      // n = -log(1 - P*r/EMI) / log(1+r)
+      const ratio = (newOutstanding * r) / activeEmi;
+      if (ratio < 1) {
+        newTenure = Math.ceil(-Math.log(1 - ratio) / Math.log(1 + r));
+      } else {
+        // EMI doesn't cover interest — edge case
+        newTenure = currentRemainingMonths;
+      }
     } else {
-      // EMI doesn't cover interest — edge case
-      newTenure = currentRemainingMonths;
+      newTenure = Math.ceil(newOutstanding / activeEmi);
     }
   }
 
@@ -352,7 +360,7 @@ export function determineBillingMonth(
   transactionDate: string | Date,
   statementDay: number
 ): string {
-  const txDate = new Date(transactionDate);
+  const txDate = typeof transactionDate === 'string' ? parseISO(transactionDate) : new Date(transactionDate);
   const txDay = txDate.getDate();
   const txMonth = txDate.getMonth();
   const txYear = txDate.getFullYear();
@@ -374,19 +382,22 @@ export function calculateBillDates(
   dueDay: number,
   billingMonth: string | Date
 ): { statementDate: string; dueDate: string } {
-  const bm = new Date(billingMonth);
+  const bm = typeof billingMonth === 'string' ? parseISO(billingMonth) : new Date(billingMonth);
   const year = bm.getFullYear();
   const month = bm.getMonth();
 
   // Statement date is statement_day of billing month
-  const statementDate = new Date(year, month, statementDay);
+  const lastDayOfStmtMonth = new Date(year, month + 1, 0).getDate();
+  const statementDate = new Date(year, month, Math.min(statementDay, lastDayOfStmtMonth));
 
   // Due date: if due_day > statement_day, same month; otherwise next month
   let dueDate: Date;
   if (dueDay > statementDay) {
-    dueDate = new Date(year, month, dueDay);
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    dueDate = new Date(year, month, Math.min(dueDay, lastDay));
   } else {
-    dueDate = new Date(year, month + 1, dueDay);
+    const lastDay = new Date(year, month + 2, 0).getDate();
+    dueDate = new Date(year, month + 1, Math.min(dueDay, lastDay));
   }
 
   return {
@@ -407,7 +418,7 @@ export function getDueInfo(dueDate: string | Date): {
   label: string;
   status: 'safe' | 'warning' | 'danger' | 'overdue';
 } {
-  const due = new Date(dueDate);
+  const due = typeof dueDate === 'string' ? parseISO(dueDate) : new Date(dueDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   due.setHours(0, 0, 0, 0);
@@ -446,12 +457,21 @@ export function getDueInfo(dueDate: string | Date): {
  */
 export function getNextEMIDate(emiDay: number): string {
   const today = new Date();
-  const thisMonth = new Date(today.getFullYear(), today.getMonth(), emiDay);
+  today.setHours(0, 0, 0, 0);
+
+  let thisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const lastDayOfThisMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  thisMonth.setDate(Math.min(emiDay, lastDayOfThisMonth));
 
   if (thisMonth > today) {
     return format(thisMonth, 'yyyy-MM-dd');
   }
-  return format(addMonths(thisMonth, 1), 'yyyy-MM-dd');
+  
+  let nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const lastDayOfNextMonth = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate();
+  nextMonth.setDate(Math.min(emiDay, lastDayOfNextMonth));
+  
+  return format(nextMonth, 'yyyy-MM-dd');
 }
 
 // ============================================================

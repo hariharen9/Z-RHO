@@ -79,6 +79,8 @@ export function SettingsPage() {
     ? fullName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
     : user?.email?.slice(0, 2).toUpperCase() || 'US';
 
+  const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url;
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto pb-12">
       {/* Title */}
@@ -101,8 +103,12 @@ export function SettingsPage() {
 
           <div className="flex flex-col sm:flex-row items-center gap-5 bg-background/35 p-4 rounded-2xl border border-border/40">
             {/* Elegant Circular Avatar Mockup */}
-            <div className="h-16 w-16 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-xl shadow-[0_0_20px_rgba(99,102,241,0.25)] border border-white/10 shrink-0">
-              {userInitials}
+            <div className="h-16 w-16 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-xl shadow-[0_0_20px_rgba(99,102,241,0.25)] border border-white/10 shrink-0 overflow-hidden">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                userInitials
+              )}
             </div>
 
             <div className="space-y-1.5 flex-1 min-w-0 text-center sm:text-left">

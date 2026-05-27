@@ -1,6 +1,57 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Landmark, Check, ChevronRight } from 'lucide-react';
+import {
+  Plus,
+  Landmark,
+  Check,
+  ChevronRight,
+  Home,
+  Car,
+  GraduationCap,
+  Briefcase,
+  User,
+  Coins,
+} from 'lucide-react';
+
+const categoryConfig: Record<
+  string,
+  {
+    icon: any;
+    color: string;
+    bgColor: string;
+  }
+> = {
+  home: {
+    icon: Home,
+    color: 'text-sky-400',
+    bgColor: 'bg-sky-500/10 border-sky-500/20',
+  },
+  personal: {
+    icon: User,
+    color: 'text-pink-400',
+    bgColor: 'bg-pink-500/10 border-pink-500/20',
+  },
+  car: {
+    icon: Car,
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-500/10 border-amber-500/20',
+  },
+  education: {
+    icon: GraduationCap,
+    color: 'text-violet-400',
+    bgColor: 'bg-violet-500/10 border-violet-500/20',
+  },
+  business: {
+    icon: Briefcase,
+    color: 'text-emerald-400',
+    bgColor: 'bg-emerald-500/10 border-emerald-500/20',
+  },
+  other: {
+    icon: Coins,
+    color: 'text-indigo-400',
+    bgColor: 'bg-indigo-500/10 border-indigo-500/20',
+  },
+};
 import { useLoans } from '@/hooks/useLoans';
 import { useLoanPayments } from '@/hooks/useLoanPayments';
 import { calculateLoanStats } from '@/lib/calculations';
@@ -102,7 +153,13 @@ export function LoansPage() {
       {!isLoading && loans.length === 0 && (
         <div className="text-center py-16 border border-dashed border-border rounded-3xl bg-surface/30">
           <Landmark className="mx-auto h-12 w-12 text-muted-foreground/60 stroke-1 mb-4" />
-          <p className="text-sm text-muted-foreground mb-4">No active loans found</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            {statusFilter === 'active'
+              ? 'No active loans found'
+              : statusFilter === 'closed'
+              ? 'No closed loans found'
+              : 'No loans found'}
+          </p>
           <Link to="/loans/new">
             <button className="rounded-full bg-foreground px-5 py-2.5 text-xs font-semibold text-background transition hover:opacity-90 active:scale-95">
               Add Your First Loan
@@ -153,11 +210,29 @@ function LoanGridItem({ loan, index }: { loan: any; index: number }) {
         className="group relative block overflow-hidden rounded-3xl border border-border bg-surface p-6 text-left transition hover:border-foreground/30 active:scale-[0.99] flex flex-col justify-between min-h-[210px] w-full"
       >
         <div className="flex items-start justify-between">
-          <div>
-            <div className="text-sm font-semibold tracking-wide text-foreground group-hover:text-primary transition-colors">
-              {loan.name}
+          <div className="flex items-center gap-3">
+            {/* Glassmorphic Category Icon */}
+            <div
+              className={`flex items-center justify-center p-2.5 rounded-xl border ${
+                categoryConfig[loan.loan_type]?.bgColor || 'bg-border/10 border-border/20'
+              } backdrop-blur-md shrink-0`}
+            >
+              {(() => {
+                const IconComponent = categoryConfig[loan.loan_type]?.icon || Coins;
+                return (
+                  <IconComponent
+                    className={`w-4 h-4 ${categoryConfig[loan.loan_type]?.color || 'text-foreground'}`}
+                    strokeWidth={1.8}
+                  />
+                );
+              })()}
             </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5">{loan.lender}</div>
+            <div>
+              <div className="text-sm font-semibold tracking-wide text-foreground group-hover:text-primary transition-colors leading-tight">
+                {loan.name}
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">{loan.lender}</div>
+            </div>
           </div>
           <ChevronRight
             size={16}

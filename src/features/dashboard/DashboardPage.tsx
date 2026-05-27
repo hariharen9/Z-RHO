@@ -10,6 +10,12 @@ import {
   Flame,
   ArrowUpRight,
   AlertTriangle,
+  Home,
+  Car,
+  GraduationCap,
+  Briefcase,
+  User,
+  Coins,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -28,8 +34,8 @@ import { useLoanPayments } from '@/hooks/useLoanPayments';
 // Components & Helpers
 import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { Progress } from '@/components/shared/Progress';
-import { formatCurrency, formatCompactCurrency } from '@/lib/currency';
-import { calculateLoanStats, calculatePrepaymentImpact } from '@/lib/calculations';
+import { formatCurrency, formatCompactCurrency, numberToWordsCompact } from '@/lib/currency';
+import { calculateLoanStats, calculatePrepaymentImpact, calculateEMI, calculateTotalInterest } from '@/lib/calculations';
 
 // Recharts
 import {
@@ -143,10 +149,10 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      
+
       {/* SECTION 1: HERO & KPI TILES */}
       <div className="grid grid-cols-12 gap-4">
-        
+
         {/* Total Liability Giant Card with Sparkline */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
@@ -162,7 +168,7 @@ export function DashboardPage() {
                 <TrendingDown size={10} /> {(totals.progress * 100).toFixed(1)}% Repaid
               </span>
             </div>
-            
+
             <div className="mt-4 flex items-end justify-between gap-8">
               <div>
                 <AnimatedNumber
@@ -227,7 +233,7 @@ export function DashboardPage() {
 
       {/* SECTION 2: LOANS PORTFOLIO & UPCOMING TIMELINE */}
       <div className="grid grid-cols-12 gap-4">
-        
+
         {/* Active Loan Portfolio Container */}
         <section className="col-span-12 overflow-hidden rounded-3xl border border-border bg-surface xl:col-span-8 flex flex-col justify-between">
           <div>
@@ -240,7 +246,7 @@ export function DashboardPage() {
                 View all <ArrowUpRight size={11} />
               </Link>
             </header>
-            
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[500px]">
                 <thead className="text-[10px] uppercase tracking-widest text-muted-foreground border-b border-border">
@@ -346,11 +352,10 @@ export function DashboardPage() {
                     >
                       {/* Calendar Tile */}
                       <div
-                        className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border ${
-                          isOverdue || urgent
-                            ? 'border-destructive/40 bg-destructive/10 text-destructive'
-                            : 'border-border bg-surface text-muted-foreground'
-                        }`}
+                        className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border ${isOverdue || urgent
+                          ? 'border-destructive/40 bg-destructive/10 text-destructive'
+                          : 'border-border bg-surface text-muted-foreground'
+                          }`}
                       >
                         <div className="text-center">
                           <div className="text-[9px] uppercase tracking-widest leading-none">
@@ -371,8 +376,8 @@ export function DashboardPage() {
                           {isOverdue
                             ? `${Math.abs(u.daysRemaining)}d overdue`
                             : u.daysRemaining === 0
-                            ? 'Due today'
-                            : `${u.daysRemaining} days left`}
+                              ? 'Due today'
+                              : `${u.daysRemaining} days left`}
                         </div>
                       </div>
 
@@ -390,7 +395,7 @@ export function DashboardPage() {
 
       {/* SECTION 3: RECHARTS & AVALANCHE CALCULATOR */}
       <div className="grid grid-cols-12 gap-4">
-        
+
         {/* Avalanche Interactive Prepayment Slider */}
         <section className="col-span-12 rounded-3xl border border-border bg-surface p-6 xl:col-span-5 flex flex-col justify-between">
           <div>
@@ -470,7 +475,7 @@ export function DashboardPage() {
 
         {/* Graphical Charts Section */}
         <section className="col-span-12 xl:col-span-7 grid md:grid-cols-2 gap-4">
-          
+
           {/* Chart 1: Debt History */}
           {debtHistory.length > 0 && (
             <div className="rounded-3xl border border-border bg-surface p-5">
@@ -535,6 +540,11 @@ export function DashboardPage() {
         </section>
       </div>
 
+      {/* SECTION 4: INTERACTIVE LOAN CALCULATOR */}
+      <div className="grid grid-cols-12 gap-4">
+        <DashboardCalculator currency={currency} />
+      </div>
+
     </div>
   );
 }
@@ -590,21 +600,376 @@ function KpiCard({
             accent === 'warning'
               ? 'text-warning'
               : accent === 'success'
-              ? 'text-success'
-              : 'text-muted-foreground'
+                ? 'text-success'
+                : 'text-muted-foreground'
           }
         />
       </div>
       <div className="mt-3">
         <div
-          className={`text-xl font-bold tabular text-foreground ${
-            accent === 'warning' ? 'text-warning' : ''
-          }`}
+          className={`text-xl font-bold tabular text-foreground ${accent === 'warning' ? 'text-warning' : ''
+            }`}
         >
           {value}
         </div>
         {hint && <div className="mt-0.5 text-[10px] text-muted-foreground truncate">{hint}</div>}
       </div>
     </div>
+  );
+}
+
+const calculatorCategoryConfig: Record<
+  string,
+  {
+    icon: any;
+    color: string;
+    bgColor: string;
+    glowColor: string;
+    label: string;
+    typicalRate: string;
+  }
+> = {
+  home: {
+    icon: Home,
+    color: 'text-sky-400',
+    bgColor: 'bg-sky-500/10 border-sky-500/20',
+    glowColor: 'rgba(56, 189, 248, 0.15)',
+    label: 'Home Loan',
+    typicalRate: '~7%–10% (house acts as collateral)',
+  },
+  personal: {
+    icon: User,
+    color: 'text-pink-400',
+    bgColor: 'bg-pink-500/10 border-pink-500/20',
+    glowColor: 'rgba(244, 63, 94, 0.15)',
+    label: 'Personal Loan',
+    typicalRate: '~10%–30% (unsecured, higher risk)',
+  },
+  car: {
+    icon: Car,
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-500/10 border-amber-500/20',
+    glowColor: 'rgba(251, 191, 36, 0.15)',
+    label: 'Car Loan',
+    typicalRate: '~7.5%–11% (vehicle as collateral)',
+  },
+  education: {
+    icon: GraduationCap,
+    color: 'text-violet-400',
+    bgColor: 'bg-violet-500/10 border-violet-500/20',
+    glowColor: 'rgba(167, 139, 250, 0.15)',
+    label: 'Education Loan',
+    typicalRate: '~7%–13% (subsidized/course dependent)',
+  },
+  business: {
+    icon: Briefcase,
+    color: 'text-emerald-400',
+    bgColor: 'bg-emerald-500/10 border-emerald-500/20',
+    glowColor: 'rgba(52, 211, 153, 0.15)',
+    label: 'Business Loan',
+    typicalRate: '~10%–25% (depends on history/collateral)',
+  },
+  other: {
+    icon: Coins,
+    color: 'text-indigo-400',
+    bgColor: 'bg-indigo-500/10 border-indigo-500/20',
+    glowColor: 'rgba(129, 140, 248, 0.15)',
+    label: 'Other Loan',
+    typicalRate: '~8%–36%+ (varies widely)',
+  },
+};
+
+function DashboardCalculator({ currency }: { currency: string }) {
+  const [calcPrincipal, setCalcPrincipal] = useState<number>(currency === 'INR' ? 1000000 : 10000);
+  const [calcRate, setCalcRate] = useState<number>(8.5);
+  const [calcTenure, setCalcTenure] = useState<number>(180);
+  const [calcTenureUnit, setCalcTenureUnit] = useState<'months' | 'years'>('months');
+  const [calcCategory, setCalcCategory] = useState<string>('home');
+
+  const calculatedEMI = useMemo(() => {
+    return calcPrincipal > 0 && calcRate >= 0 && calcTenure > 0
+      ? calculateEMI(calcPrincipal, calcRate, calcTenure)
+      : 0;
+  }, [calcPrincipal, calcRate, calcTenure]);
+
+  const totalInterest = useMemo(() => {
+    return calculatedEMI > 0
+      ? calculateTotalInterest(calcPrincipal, calculatedEMI, calcTenure)
+      : 0;
+  }, [calcPrincipal, calculatedEMI, calcTenure]);
+
+  const totalPayable = calcPrincipal + totalInterest;
+  const principalRatio = totalPayable > 0 ? calcPrincipal / totalPayable : 1;
+  const interestRatio = 1 - principalRatio;
+
+  const inputClass =
+    'w-full px-4 py-2.5 bg-background/50 border border-border/80 rounded-xl text-foreground focus:border-foreground/45 transition-all duration-300 outline-none backdrop-blur-md text-xs';
+
+  return (
+    <section className="rounded-3xl border border-border bg-surface p-6 col-span-12 space-y-6">
+      <header className="flex items-center justify-between border-b border-border/40 pb-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <Sparkles size={14} className="text-warning" /> Loan Calculator
+          </h2>
+          <p className="text-[11px] text-muted-foreground">Simulate loan options in real-time</p>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Left Column: Slider & Input Controls */}
+        <div className="lg:col-span-7 space-y-5">
+          {/* Category Dropdown */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
+                Category
+              </label>
+              <select
+                value={calcCategory}
+                onChange={(e) => setCalcCategory(e.target.value)}
+                className="w-full px-3 py-2 bg-background/50 border border-border/80 rounded-xl text-foreground focus:border-foreground/45 transition-all duration-300 outline-none backdrop-blur-md text-xs font-medium cursor-pointer"
+              >
+                <option value="home">Home Loan</option>
+                <option value="personal">Personal Loan</option>
+                <option value="car">Car Loan</option>
+                <option value="education">Education Loan</option>
+                <option value="business">Business Loan</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            {/* Rate context hint */}
+            <div className="flex flex-col justify-end">
+              <span className="text-[9px] uppercase tracking-widest text-muted-foreground mb-1">
+                Category Guidelines
+              </span>
+              <span className="text-[10px] text-foreground font-medium bg-background/40 py-2 px-3 border border-border/30 rounded-xl truncate">
+                {calculatorCategoryConfig[calcCategory]?.typicalRate}
+              </span>
+            </div>
+          </div>
+
+          {/* Principal Amount Input */}
+          <div>
+            <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
+              Principal Amount ({currency})
+            </label>
+            <input
+              type="number"
+              value={calcPrincipal || ''}
+              onChange={(e) => setCalcPrincipal(parseFloat(e.target.value) || 0)}
+              className={inputClass}
+              placeholder="e.g. 1000000"
+            />
+            {calcPrincipal >= 1000 && (
+              <p className="text-[10px] text-muted-foreground font-medium mt-1.5 px-1 tracking-wide">
+                {numberToWordsCompact(calcPrincipal, currency)}
+              </p>
+            )}
+          </div>
+
+          {/* Interest Rate & Tenure */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
+                Interest Rate (% p.a.)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={calcRate || ''}
+                onChange={(e) => setCalcRate(parseFloat(e.target.value) || 0)}
+                className={inputClass}
+                placeholder="e.g. 8.5"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                  Tenure
+                </label>
+                <div className="flex bg-background/80 p-0.5 rounded-lg border border-border/50 text-[9px] font-bold uppercase tracking-wider">
+                  <button
+                    type="button"
+                    onClick={() => setCalcTenureUnit('months')}
+                    className={`px-2 py-0.5 rounded-md transition-all duration-200 ${calcTenureUnit === 'months'
+                      ? 'bg-surface text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                  >
+                    Months
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCalcTenureUnit('years')}
+                    className={`px-2 py-0.5 rounded-md transition-all duration-200 ${calcTenureUnit === 'years'
+                      ? 'bg-surface text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                  >
+                    Years
+                  </button>
+                </div>
+              </div>
+              <input
+                type="number"
+                step="any"
+                value={
+                  calcTenure > 0
+                    ? calcTenureUnit === 'years'
+                      ? calcTenure % 12 === 0
+                        ? calcTenure / 12
+                        : parseFloat((calcTenure / 12).toFixed(2))
+                      : calcTenure
+                    : ''
+                }
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  setCalcTenure(
+                    calcTenureUnit === 'years'
+                      ? Math.round(val * 12)
+                      : Math.round(val)
+                  );
+                }}
+                className={inputClass}
+                placeholder={calcTenureUnit === 'years' ? 'e.g. 5' : 'e.g. 24'}
+              />
+              {calcTenure > 0 && (
+                <p className="text-[10px] text-muted-foreground font-medium mt-1.5 px-1 tracking-wide">
+                  {calcTenureUnit === 'years'
+                    ? `Equivalent to ${calcTenure} months`
+                    : `Equivalent to ${calcTenure % 12 === 0
+                      ? `${calcTenure / 12} years`
+                      : `${parseFloat((calcTenure / 12).toFixed(2))} years`
+                    }`}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Premium Metric summary */}
+        <div className="lg:col-span-5 flex flex-col items-center">
+          {/* DYNAMIC METRIC SUMMARY HERO CARD */}
+          <div className="relative overflow-hidden rounded-3xl border border-border bg-background p-6 w-full space-y-6 flex-1 flex flex-col justify-between">
+            {/* Glow backdrop reflections */}
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 h-44 opacity-25 transition-all duration-500"
+              style={{
+                background: `radial-gradient(80% 60% at 50% 0%, ${calculatorCategoryConfig[calcCategory]?.glowColor || 'rgba(255, 255, 255, 0.15)'
+                  } 5%, transparent 70%)`,
+              }}
+            />
+
+            {/* Subtle background watermark icon */}
+            <div className="absolute right-[-20px] bottom-[-20px] pointer-events-none opacity-[0.03] text-foreground select-none z-0">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={calcCategory}
+                  initial={{ opacity: 0, scale: 0.6, rotate: 30 }}
+                  animate={{ opacity: 1, scale: 1, rotate: 12 }}
+                  exit={{ opacity: 0, scale: 0.6, rotate: 30 }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                >
+                  {(() => {
+                    const IconComponent = calculatorCategoryConfig[calcCategory]?.icon || Coins;
+                    return <IconComponent className="w-48 h-48" strokeWidth={1} />;
+                  })()}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            <div className="flex justify-between items-start relative z-10">
+              <div className="space-y-1">
+                <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">Estimated Monthly EMI</div>
+                <div className="mt-1 text-2xl font-bold tabular text-foreground">
+                  {formatCurrency(calculatedEMI, currency)}
+                </div>
+                <div className="mt-1 text-[10px] text-muted-foreground">
+                  {calculatorCategoryConfig[calcCategory]?.label} Sandbox Simulation
+                </div>
+              </div>
+
+              {/* Dynamic Category Icon */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={calcCategory}
+                  initial={{ opacity: 0, scale: 0.8, rotate: -15 }}
+                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, rotate: 15 }}
+                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                  className={`flex items-center justify-center p-2.5 rounded-xl border ${calculatorCategoryConfig[calcCategory]?.bgColor || 'bg-border/10 border-border/20'
+                    } backdrop-blur-md shadow-inner`}
+                >
+                  {(() => {
+                    const IconComponent = calculatorCategoryConfig[calcCategory]?.icon || Coins;
+                    return (
+                      <IconComponent
+                        className={`w-5.5 h-5.5 ${calculatorCategoryConfig[calcCategory]?.color || 'text-foreground'
+                          }`}
+                        strokeWidth={1.8}
+                      />
+                    );
+                  })()}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* Cost split progress bar */}
+            <div className="relative z-10 space-y-2">
+              <div className="flex justify-between text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">
+                <span>Interest split ratio</span>
+                <span>{calculatedEMI > 0 ? `${(interestRatio * 100).toFixed(0)}%` : '0%'}</span>
+              </div>
+
+              <div className="h-2 w-full overflow-hidden rounded-full bg-secondary flex">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${principalRatio * 100}%` }}
+                  transition={{ type: 'spring', stiffness: 80, damping: 18 }}
+                  className="bg-success h-full"
+                />
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${interestRatio * 100}%` }}
+                  transition={{ type: 'spring', stiffness: 80, damping: 18, delay: 0.05 }}
+                  className="bg-warning h-full"
+                />
+              </div>
+            </div>
+
+            {/* Split Metrics */}
+            <div className="relative z-10 grid grid-cols-2 gap-3 text-xs">
+              <div className="rounded-2xl border border-border bg-surface p-3 flex flex-col justify-between">
+                <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-success font-semibold">
+                  <span className="h-1.5 w-1.5 rounded-full bg-success" /> Principal
+                </div>
+                <div className="mt-2 font-bold text-foreground text-xs tabular">
+                  {formatCurrency(calcPrincipal, currency)}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-surface p-3 flex flex-col justify-between">
+                <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-warning font-semibold">
+                  <span className="h-1.5 w-1.5 rounded-full bg-warning" /> Total Interest
+                </div>
+                <div className="mt-2 font-bold text-foreground text-xs tabular">
+                  {formatCurrency(totalInterest, currency)}
+                </div>
+              </div>
+            </div>
+
+            {/* Lifetime Cost Row */}
+            <div className="relative z-10 flex justify-between items-center bg-surface/50 border border-border/40 p-3 rounded-2xl text-[10px] uppercase font-bold tracking-wider">
+              <span className="text-muted-foreground">Total Lifetime Outflow</span>
+              <span className="text-foreground text-xs tabular">{formatCurrency(totalPayable, currency)}</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

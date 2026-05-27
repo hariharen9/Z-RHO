@@ -18,11 +18,71 @@ import {
   Receipt,
   CircleDollarSign,
   PieChart,
+  Home,
+  Car,
+  GraduationCap,
+  Briefcase,
+  User,
+  Coins,
 } from 'lucide-react';
+
+const categoryConfig: Record<
+  string,
+  {
+    icon: any;
+    color: string;
+    bgColor: string;
+    glowColor: string;
+    label: string;
+  }
+> = {
+  home: {
+    icon: Home,
+    color: 'text-sky-400',
+    bgColor: 'bg-sky-500/10 border-sky-500/20',
+    glowColor: 'rgba(56, 189, 248, 0.15)',
+    label: 'Home Loan',
+  },
+  personal: {
+    icon: User,
+    color: 'text-pink-400',
+    bgColor: 'bg-pink-500/10 border-pink-500/20',
+    glowColor: 'rgba(244, 63, 94, 0.15)',
+    label: 'Personal Loan',
+  },
+  car: {
+    icon: Car,
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-500/10 border-amber-500/20',
+    glowColor: 'rgba(251, 191, 36, 0.15)',
+    label: 'Car Loan',
+  },
+  education: {
+    icon: GraduationCap,
+    color: 'text-violet-400',
+    bgColor: 'bg-violet-500/10 border-violet-500/20',
+    glowColor: 'rgba(167, 139, 250, 0.15)',
+    label: 'Education Loan',
+  },
+  business: {
+    icon: Briefcase,
+    color: 'text-emerald-400',
+    bgColor: 'bg-emerald-500/10 border-emerald-500/20',
+    glowColor: 'rgba(52, 211, 153, 0.15)',
+    label: 'Business Loan',
+  },
+  other: {
+    icon: Coins,
+    color: 'text-indigo-400',
+    bgColor: 'bg-indigo-500/10 border-indigo-500/20',
+    glowColor: 'rgba(129, 140, 248, 0.15)',
+    label: 'Other Loan',
+  },
+};
 
 // Hooks & Calculations
 import { useLoan, useUpdateLoan, useDeleteLoan } from '@/hooks/useLoans';
-import { useLoanPayments, useRecordPayment, useRecordPrepayment } from '@/hooks/useLoanPayments';
+import { useLoanPayments, useRecordPayment, useRecordPrepayment, useDeletePayment } from '@/hooks/useLoanPayments';
 import {
   calculateLoanStats,
   generateAmortizationSchedule,
@@ -54,6 +114,7 @@ export function LoanDetailPage() {
   const updateLoan = useUpdateLoan();
   const recordRegularPayment = useRecordPayment();
   const recordPrepayment = useRecordPrepayment();
+  const deletePayment = useDeletePayment();
 
   // States
   const [activeTab, setActiveTab] = useState<LoanTab>('summary');
@@ -61,6 +122,7 @@ export function LoanDetailPage() {
   const [showPrepay, setShowPrepay] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showStatusConfirm, setShowStatusConfirm] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<{ id: string; amount: number; label: string } | null>(null);
 
   // Math Schedule & Stats
   const schedule = useMemo(() => {
@@ -192,11 +254,21 @@ export function LoanDetailPage() {
       <div className="relative overflow-hidden rounded-3xl border border-border bg-surface p-6">
         {/* Ambient Top Glow reflection */}
         <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-64 opacity-50"
+          className="pointer-events-none absolute inset-x-0 top-0 h-64 opacity-50 transition-all duration-500"
           style={{
-            background: 'radial-gradient(80% 60% at 50% 0%, var(--foreground) 5%, transparent 70%)',
+            background: `radial-gradient(80% 60% at 50% 0%, ${
+              categoryConfig[loan.loan_type]?.glowColor || 'var(--foreground)'
+            } 5%, transparent 70%)`,
           }}
         />
+
+        {/* Subtle background watermark icon */}
+        <div className="absolute right-[-20px] bottom-[-20px] pointer-events-none opacity-[0.03] text-foreground select-none z-0">
+          {(() => {
+            const IconComponent = categoryConfig[loan.loan_type]?.icon || Coins;
+            return <IconComponent className="w-56 h-56 rotate-12" strokeWidth={1} />;
+          })()}
+        </div>
 
         <div className="relative z-10 flex items-center justify-between text-foreground">
           <div>
@@ -208,7 +280,23 @@ export function LoanDetailPage() {
               of {formatCurrency(loan.principal_amount, loan.currency)} Principal · {(repayProgress * 100).toFixed(1)}% repaid
             </div>
           </div>
-          <span className="text-2xl font-semibold opacity-10">ρ</span>
+
+          {/* Dynamic Category Icon Badge */}
+          <div
+            className={`flex items-center justify-center p-3.5 rounded-2xl border ${
+              categoryConfig[loan.loan_type]?.bgColor || 'bg-border/10 border-border/20'
+            } backdrop-blur-md shadow-inner shrink-0`}
+          >
+            {(() => {
+              const IconComponent = categoryConfig[loan.loan_type]?.icon || Coins;
+              return (
+                <IconComponent
+                  className={`w-6 h-6 ${categoryConfig[loan.loan_type]?.color || 'text-foreground'}`}
+                  strokeWidth={1.8}
+                />
+              );
+            })()}
+          </div>
         </div>
 
         <div className="relative z-10 mt-6">
@@ -231,7 +319,7 @@ export function LoanDetailPage() {
               onClick={() => setShowPayEMI(true)}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-foreground py-3.5 text-xs font-semibold text-background transition hover:opacity-90 active:scale-[0.98]"
             >
-              <Check size={13} /> Pay EMI · {formatCurrency(nextEMI.emiAmount, loan.currency)}
+              <Check size={13} /> Pay EMI #{nextEMI.month} · {formatCurrency(nextEMI.emiAmount, loan.currency)}
             </button>
           ) : (
             <div className="flex flex-1 items-center justify-center bg-success/10 text-success rounded-2xl py-3.5 text-xs font-semibold">
@@ -357,6 +445,97 @@ export function LoanDetailPage() {
                 <DetailBox label="Projected Payoff Date" value={stats.emisRemaining > 0 ? format(parseISO(stats.projectedPayoffDate), 'MMMM yyyy') : 'Fully paid'} Icon={Target} />
                 <DetailBox label="Total Interest Remaining" value={formatCurrency(stats.totalInterestRemaining, loan.currency)} Icon={TrendingDown} />
               </div>
+
+              {/* Repayment History Log */}
+              <div className="rounded-3xl border border-border bg-surface p-5 space-y-4">
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    Repayment History Log
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Manage and audit all logged EMI payments and prepayments</p>
+                </div>
+
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                  {payments.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+                      No payments recorded yet. Click "Pay EMI" above to get started!
+                    </div>
+                  ) : (
+                    [...payments]
+                      .sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime())
+                      .map((p) => {
+                        const dateParsed = p.payment_date ? parseISO(p.payment_date) : new Date();
+                        return (
+                          <div
+                            key={p.id}
+                            className="group flex items-center justify-between rounded-2xl border border-border bg-background p-3.5 hover:border-foreground/20 transition-all duration-200"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl border ${
+                                  p.is_prepayment
+                                    ? 'border-warning/30 bg-warning/5 text-warning'
+                                    : 'border-success/30 bg-success/5 text-success'
+                                }`}
+                              >
+                                <Receipt size={14} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-foreground flex flex-wrap items-center gap-2">
+                                  {p.is_prepayment ? (
+                                    <span className="px-1.5 py-0.5 rounded-md bg-warning/10 text-warning text-[8px] font-bold uppercase tracking-wider">
+                                      Prepayment ({p.prepayment_type === 'full_closure' ? 'Full' : 'Part'})
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded-md bg-success/10 text-success text-[8px] font-bold uppercase tracking-wider">
+                                      EMI Payment
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-muted-foreground font-normal">
+                                    {format(dateParsed, 'dd MMM yyyy')}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-muted-foreground mt-1 truncate">
+                                  P: {formatCurrency(p.principal_component, loan.currency)}
+                                  {p.interest_component > 0 && ` · I: ${formatCurrency(p.interest_component, loan.currency)}`}
+                                  {p.notes && ` · "${p.notes}"`}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-right shrink-0">
+                              <div>
+                                <div className="text-xs font-bold text-foreground">
+                                  {formatCurrency(p.amount_paid, loan.currency)}
+                                </div>
+                                <div className="text-[9px] text-muted-foreground mt-0.5">
+                                  Bal: {formatCurrency(p.outstanding_after, loan.currency)}
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPaymentToDelete({
+                                    id: p.id,
+                                    amount: p.amount_paid,
+                                    label: p.is_prepayment
+                                      ? `Prepayment (${format(dateParsed, 'dd MMM yyyy')})`
+                                      : `EMI Payment for ${format(dateParsed, 'dd MMM yyyy')}`,
+                                  });
+                                }}
+                                className="p-1.5 rounded-lg border border-border bg-background hover:bg-destructive/10 text-destructive md:opacity-0 group-hover:opacity-100 transition-all duration-200"
+                                title="Delete payment record"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
             </motion.div>
           )}
 
@@ -369,41 +548,76 @@ export function LoanDetailPage() {
               exit={{ opacity: 0, y: -6 }}
               className="divide-y divide-border/60 overflow-hidden rounded-3xl border border-border bg-surface"
             >
-              {schedule.map((row) => (
-                <div
-                  key={row.month}
-                  className={`flex items-center justify-between px-5 py-3 text-xs ${
-                    row.status === 'paid' ? 'opacity-55 hover:opacity-80 transition' : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`grid h-6 w-6 place-items-center rounded-full text-[9px] font-bold tabular ${
-                        row.status === 'paid' ? 'bg-success/15 text-success' : 'bg-secondary text-muted-foreground border border-border'
-                      }`}
-                    >
-                      {row.status === 'paid' ? <Check size={11} /> : row.month}
+              {schedule.map((row) => {
+                const matchingPayment = payments.find((p) => {
+                  if (p.is_prepayment) return false;
+                  const pMonth = p.emi_month ? format(parseISO(p.emi_month), 'yyyy-MM') : '';
+                  const rMonth = row.date ? format(parseISO(row.date), 'yyyy-MM') : '';
+                  return pMonth === rMonth;
+                });
+
+                return (
+                  <div
+                    key={row.month}
+                    className={`group flex items-center justify-between px-5 py-3.5 text-xs transition-colors duration-200 hover:bg-surface-elevated/20 ${
+                      row.status === 'paid' ? 'opacity-70 hover:opacity-100' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`grid h-6 w-6 place-items-center rounded-full text-[9px] font-bold tabular ${
+                          row.status === 'paid'
+                            ? 'bg-success/15 text-success'
+                            : 'bg-secondary text-muted-foreground border border-border'
+                        }`}
+                      >
+                        {row.status === 'paid' ? <Check size={11} /> : row.month}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-foreground flex items-center gap-2">
+                          {format(parseISO(row.date), 'MMM yyyy')}
+                          {row.status === 'paid' && (
+                            <span className="px-1.5 py-0.5 rounded-md bg-success/10 text-success text-[8px] font-bold uppercase tracking-wider">
+                              Paid
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[9px] text-muted-foreground mt-0.5">
+                          P: {formatCurrency(row.principalComponent, loan.currency)} · I: {formatCurrency(row.interestComponent, loan.currency)}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-semibold text-foreground">
-                        {format(parseISO(row.date), 'MMM yyyy')}
+                    
+                    <div className="flex items-center gap-4 text-right">
+                      <div>
+                        <div className="font-semibold text-foreground">
+                          {formatCurrency(row.emiAmount, loan.currency)}
+                        </div>
+                        <div className="text-[9px] text-muted-foreground mt-0.5">
+                          Bal: {formatCurrency(row.outstandingBalance, loan.currency)}
+                        </div>
                       </div>
-                      <div className="text-[9px] text-muted-foreground mt-0.5">
-                        P: {formatCurrency(row.principalComponent, loan.currency)} · I: {formatCurrency(row.interestComponent, loan.currency)}
-                      </div>
+
+                      {row.status === 'paid' && matchingPayment && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPaymentToDelete({
+                              id: matchingPayment.id,
+                              amount: matchingPayment.amount_paid,
+                              label: `EMI Payment for ${format(parseISO(row.date), 'MMMM yyyy')}`,
+                            });
+                          }}
+                          className="p-1.5 rounded-lg border border-border bg-background hover:bg-destructive/10 text-destructive md:opacity-0 group-hover:opacity-100 transition-all duration-200"
+                          title="Delete EMI payment"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      )}
                     </div>
                   </div>
-                  
-                  <div className="text-right">
-                    <div className="font-semibold text-foreground">
-                      {formatCurrency(row.emiAmount, loan.currency)}
-                    </div>
-                    <div className="text-[9px] text-muted-foreground mt-0.5">
-                      Bal: {formatCurrency(row.outstandingBalance, loan.currency)}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </motion.div>
           )}
 
@@ -554,6 +768,25 @@ export function LoanDetailPage() {
         message={`Are you sure you want to mark this loan as ${loan.status === 'active' ? 'closed' : 'active'}?`}
         confirmText={loan.status === 'active' ? 'Archive' : 'Activate'}
         variant={loan.status === 'active' ? 'warning' : 'success'}
+      />
+
+      <ConfirmModal
+        isOpen={!!paymentToDelete}
+        onClose={() => setPaymentToDelete(null)}
+        onConfirm={async () => {
+          if (paymentToDelete) {
+            await deletePayment.mutateAsync({ id: paymentToDelete.id, loan_id: loan.id });
+            setPaymentToDelete(null);
+          }
+        }}
+        title="Delete Repayment Record"
+        message={`Are you sure you want to delete the record of "${
+          paymentToDelete?.label || ''
+        }" for ${
+          paymentToDelete ? formatCurrency(paymentToDelete.amount, loan.currency) : ''
+        }? This is permanent, cannot be undone, and will restore the loan's outstanding balance.`}
+        confirmText="Delete record"
+        variant="danger"
       />
 
     </div>

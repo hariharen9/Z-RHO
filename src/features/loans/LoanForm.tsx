@@ -2,17 +2,91 @@
 // ZRHO — Loans: Add/Edit Loan Form
 // ============================================================
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Landmark, Sparkles, TrendingDown, Target, Zap } from 'lucide-react';
+import {
+  ArrowLeft,
+  Landmark,
+  Sparkles,
+  TrendingDown,
+  Target,
+  Zap,
+  Home,
+  Car,
+  GraduationCap,
+  Briefcase,
+  User,
+  Coins,
+} from 'lucide-react';
 import { useCreateLoan, useLoan, useUpdateLoan } from '@/hooks/useLoans';
+
+const categoryConfig: Record<
+  string,
+  {
+    icon: any;
+    color: string;
+    bgColor: string;
+    glowColor: string;
+    label: string;
+    typicalRate: string;
+  }
+> = {
+  home: {
+    icon: Home,
+    color: 'text-sky-400',
+    bgColor: 'bg-sky-500/10 border-sky-500/20',
+    glowColor: 'rgba(56, 189, 248, 0.15)',
+    label: 'Home Loan',
+    typicalRate: '~7%–10% (house acts as collateral)',
+  },
+  personal: {
+    icon: User,
+    color: 'text-pink-400',
+    bgColor: 'bg-pink-500/10 border-pink-500/20',
+    glowColor: 'rgba(244, 63, 94, 0.15)',
+    label: 'Personal Loan',
+    typicalRate: '~10%–30% (unsecured high risk)',
+  },
+  car: {
+    icon: Car,
+    color: 'text-amber-400',
+    bgColor: 'bg-amber-500/10 border-amber-500/20',
+    glowColor: 'rgba(251, 191, 36, 0.15)',
+    label: 'Car Loan',
+    typicalRate: '~7.5%–11% (vehicle acts as collateral)',
+  },
+  education: {
+    icon: GraduationCap,
+    color: 'text-violet-400',
+    bgColor: 'bg-violet-500/10 border-violet-500/20',
+    glowColor: 'rgba(167, 139, 250, 0.15)',
+    label: 'Education Loan',
+    typicalRate: '~7%–13% (subsidized/course dependent)',
+  },
+  business: {
+    icon: Briefcase,
+    color: 'text-emerald-400',
+    bgColor: 'bg-emerald-500/10 border-emerald-500/20',
+    glowColor: 'rgba(52, 211, 153, 0.15)',
+    label: 'Business Loan',
+    typicalRate: '~10%–25% (depends on history/collateral)',
+  },
+  other: {
+    icon: Coins,
+    color: 'text-indigo-400',
+    bgColor: 'bg-indigo-500/10 border-indigo-500/20',
+    glowColor: 'rgba(129, 140, 248, 0.15)',
+    label: 'Other Loan',
+    typicalRate: '~8%–36%+ (varies widely)',
+  },
+};
 import { calculateEMI, calculateTotalInterest } from '@/lib/calculations';
 import { calculateEndDate, formatDate } from '@/lib/dates';
-import { formatCurrency } from '@/lib/currency';
+import { formatCurrency, numberToWordsCompact } from '@/lib/currency';
 import { Button } from '@/components/ui/Button';
 import { LOAN_TYPE_LABELS } from '@/lib/constants';
 import { Dropdown } from '@/components/ui/Dropdown';
@@ -58,6 +132,8 @@ export function LoanForm() {
   const isEdit = !!id;
   const navigate = useNavigate();
 
+  const [tenureUnit, setTenureUnit] = useState<'months' | 'years'>('months');
+
   const { data: existingLoan } = useLoan(id);
   const createLoan = useCreateLoan();
   const updateLoan = useUpdateLoan();
@@ -92,6 +168,12 @@ export function LoanForm() {
       setValue('emi_day', existingLoan.emi_day);
       setValue('start_date', existingLoan.start_date);
       setValue('notes', existingLoan.notes ?? '');
+
+      if (existingLoan.tenure_months % 12 === 0) {
+        setTenureUnit('years');
+      } else {
+        setTenureUnit('months');
+      }
     }
   }, [existingLoan, setValue]);
 
@@ -103,6 +185,7 @@ export function LoanForm() {
   const currency = String(watch('currency') || 'INR');
   const watchName = watch('name') || 'LOAN PROFILE';
   const watchLender = watch('lender') || 'LENDER';
+  const loanType = watch('loan_type') || 'personal';
 
   const calculatedEMI = useMemo(() => {
     return principal > 0 && rate >= 0 && tenure > 0
@@ -231,7 +314,13 @@ export function LoanForm() {
                   className={inputClass}
                   placeholder="e.g. 1500000"
                 />
-                {errors.principal_amount && <p className="text-red-400 text-xs mt-1 font-medium">{errors.principal_amount.message}</p>}
+                {errors.principal_amount ? (
+                  <p className="text-red-400 text-xs mt-1 font-medium">{errors.principal_amount.message}</p>
+                ) : principal >= 1000 ? (
+                  <p className="text-[10px] text-muted-foreground font-medium mt-1.5 px-1 tracking-wide">
+                    {numberToWordsCompact(principal, currency)}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
@@ -244,19 +333,85 @@ export function LoanForm() {
                   className={inputClass}
                   placeholder="e.g. 8.5"
                 />
-                {errors.interest_rate && <p className="text-red-400 text-xs mt-1 font-medium">{errors.interest_rate.message}</p>}
+                {errors.interest_rate ? (
+                  <p className="text-red-400 text-xs mt-1 font-medium">{errors.interest_rate.message}</p>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground font-medium mt-1.5 px-1 tracking-wide">
+                    Typical: {categoryConfig[loanType]?.typicalRate || '—'}
+                  </p>
+                )}
               </div>
               <div>
-                <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
-                  Tenure (Months)
-                </label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+                    Tenure
+                  </label>
+                  <div className="flex bg-background/80 p-0.5 rounded-lg border border-border/50 text-[9px] font-bold uppercase tracking-wider">
+                    <button
+                      type="button"
+                      onClick={() => setTenureUnit('months')}
+                      className={`px-2 py-0.5 rounded-md transition-all duration-200 ${
+                        tenureUnit === 'months'
+                          ? 'bg-surface text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Months
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTenureUnit('years')}
+                      className={`px-2 py-0.5 rounded-md transition-all duration-200 ${
+                        tenureUnit === 'years'
+                          ? 'bg-surface text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Years
+                    </button>
+                  </div>
+                </div>
                 <input
-                  {...register('tenure_months')}
                   type="number"
+                  step="any"
+                  value={
+                    tenure > 0
+                      ? tenureUnit === 'years'
+                        ? tenure % 12 === 0
+                          ? tenure / 12
+                          : parseFloat((tenure / 12).toFixed(2))
+                        : tenure
+                      : ''
+                  }
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setValue(
+                      'tenure_months',
+                      tenureUnit === 'years'
+                        ? Math.round(val * 12)
+                        : Math.round(val),
+                      {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      }
+                    );
+                  }}
                   className={inputClass}
-                  placeholder="e.g. 180"
+                  placeholder={tenureUnit === 'years' ? 'e.g. 5' : 'e.g. 24'}
                 />
-                {errors.tenure_months && <p className="text-red-400 text-xs mt-1 font-medium">{errors.tenure_months.message}</p>}
+                {errors.tenure_months ? (
+                  <p className="text-red-400 text-xs mt-1 font-medium">{errors.tenure_months.message}</p>
+                ) : tenure > 0 ? (
+                  <p className="text-[10px] text-muted-foreground font-medium mt-1.5 px-1 tracking-wide">
+                    {tenureUnit === 'years'
+                      ? `Equivalent to ${tenure} months`
+                      : `Equivalent to ${
+                          tenure % 12 === 0
+                            ? `${tenure / 12} years`
+                            : `${parseFloat((tenure / 12).toFixed(2))} years`
+                        }`}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -344,20 +499,57 @@ export function LoanForm() {
             <div className="relative overflow-hidden rounded-3xl border border-border bg-background p-6 w-full space-y-6">
               {/* Glow backdrop reflections */}
               <div
-                className="pointer-events-none absolute inset-x-0 top-0 h-44 opacity-25"
+                className="pointer-events-none absolute inset-x-0 top-0 h-44 opacity-25 transition-all duration-500"
                 style={{
-                  background: 'radial-gradient(80% 60% at 50% 0%, var(--foreground) 5%, transparent 70%)',
+                  background: `radial-gradient(80% 60% at 50% 0%, ${categoryConfig[loanType]?.glowColor || 'var(--foreground)'} 5%, transparent 70%)`,
                 }}
               />
 
-              <div className="relative z-10">
-                <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">Estimated Monthly EMI</div>
-                <div className="mt-1 text-3xl font-bold tabular text-foreground">
-                  {formatCurrency(calculatedEMI, currency)}
+              {/* Subtle background watermark icon */}
+              <div className="absolute right-[-20px] bottom-[-20px] pointer-events-none opacity-[0.03] text-foreground select-none z-0">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={loanType}
+                    initial={{ opacity: 0, scale: 0.6, rotate: 30 }}
+                    animate={{ opacity: 1, scale: 1, rotate: 12 }}
+                    exit={{ opacity: 0, scale: 0.6, rotate: 30 }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                  >
+                    {(() => {
+                      const IconComponent = categoryConfig[loanType]?.icon || Coins;
+                      return <IconComponent className="w-48 h-48" strokeWidth={1} />;
+                    })()}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              <div className="flex justify-between items-start relative z-10">
+                <div className="space-y-1">
+                  <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">Estimated Monthly EMI</div>
+                  <div className="mt-1 text-3xl font-bold tabular text-foreground">
+                    {formatCurrency(calculatedEMI, currency)}
+                  </div>
+                  <div className="mt-1 text-[10px] text-muted-foreground">
+                    {watchName} · {watchLender}
+                  </div>
                 </div>
-                <div className="mt-1 text-[10px] text-muted-foreground">
-                  {watchName} · {watchLender}
-                </div>
+
+                {/* Dynamic Category Icon with Framer Motion for premium smooth transitions */}
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={loanType}
+                    initial={{ opacity: 0, scale: 0.8, rotate: -15 }}
+                    animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                    exit={{ opacity: 0, scale: 0.8, rotate: 15 }}
+                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                    className={`flex items-center justify-center p-3 rounded-2xl border ${categoryConfig[loanType]?.bgColor || 'bg-border/10 border-border/20'} backdrop-blur-md shadow-inner`}
+                  >
+                    {(() => {
+                      const IconComponent = categoryConfig[loanType]?.icon || Coins;
+                      return <IconComponent className={`w-6 h-6 ${categoryConfig[loanType]?.color || 'text-foreground'}`} strokeWidth={1.8} />;
+                    })()}
+                  </motion.div>
+                </AnimatePresence>
               </div>
 
               {/* Cost split progress bar */}

@@ -85,6 +85,15 @@ export function useRecordPayment() {
         .single();
 
       if (error) throw error;
+
+      // If outstanding balance hits 0 or less, mark the loan as closed
+      if (outstandingAfter <= 0) {
+        await supabase
+          .from('loans')
+          .update({ status: 'closed', current_outstanding: 0 })
+          .eq('id', input.loan_id);
+      }
+
       return data as LoanPayment;
     },
     onSuccess: (_, variables) => {
@@ -151,6 +160,76 @@ export function useRecordPrepayment() {
       }
 
       return data as LoanPayment;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [PAYMENTS_KEY, variables.loan_id] });
+      queryClient.invalidateQueries({ queryKey: [LOANS_KEY] });
+    },
+  });
+}
+
+/**
+ * Delete a payment (regular or prepayment) and recalculate outstanding balance.
+ */
+export function useDeletePayment() {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+
+  return useMutation({
+    mutationFn: async (input: { id: string; loan_id: string }) => {
+      if (!user) throw new Error('Not authenticated');
+
+      // 1. Delete payment
+      const { data: deletedPayment, error: deleteError } = await supabase
+        .from('loan_payments')
+        .delete()
+        .eq('id', input.id)
+        .select()
+        .single();
+
+      if (deleteError) throw deleteError;
+
+      // 2. Fetch all remaining payments for this loan to re-calculate current outstanding
+      const { data: remainingPayments, error: fetchError } = await supabase
+        .from('loan_payments')
+        .select('principal_component')
+        .eq('loan_id', input.loan_id);
+
+      if (fetchError) throw fetchError;
+
+      const { data: loanData, error: loanFetchError } = await supabase
+        .from('loans')
+        .select('principal_amount')
+        .eq('id', input.loan_id)
+        .single();
+
+      if (loanFetchError) throw loanFetchError;
+
+      const totalPrincipalPaid = (remainingPayments || []).reduce(
+        (sum, p) => sum + Number(p.principal_component),
+        0
+      );
+
+      const newOutstanding = Math.max(0, Number(loanData.principal_amount) - totalPrincipalPaid);
+
+      // 3. Update loan's current outstanding
+      // If we deleted a full closure payment or the new outstanding is greater than 0, reopen the loan
+      const isFullClosure = deletedPayment.prepayment_type === 'full_closure';
+      const updatePayload: any = {
+        current_outstanding: newOutstanding,
+      };
+      if (isFullClosure || newOutstanding > 0) {
+        updatePayload.status = 'active';
+      }
+
+      const { error: updateError } = await supabase
+        .from('loans')
+        .update(updatePayload)
+        .eq('id', input.loan_id);
+
+      if (updateError) throw updateError;
+
+      return deletedPayment as LoanPayment;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [PAYMENTS_KEY, variables.loan_id] });

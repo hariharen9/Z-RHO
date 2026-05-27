@@ -60,6 +60,42 @@ export function formatCompactCurrency(
 }
 
 /**
+ * Convert a number to compact words (e.g. 5 Lakhs, 1.5 Crores, 2 Millions).
+ */
+export function numberToWordsCompact(amount: number, currencyCode: string = 'INR'): string {
+  if (!amount || isNaN(amount)) return '';
+  
+  if (currencyCode === 'INR') {
+    if (amount >= 1_00_00_000) {
+      const cr = amount / 1_00_00_000;
+      return `${cr % 1 === 0 ? cr : cr.toFixed(2)} Crore${cr > 1 ? 's' : ''}`;
+    }
+    if (amount >= 1_00_000) {
+      const lk = amount / 1_00_000;
+      return `${lk % 1 === 0 ? lk : lk.toFixed(2)} Lakh${lk > 1 ? 's' : ''}`;
+    }
+    if (amount >= 1_000) {
+      const k = amount / 1_000;
+      return `${k % 1 === 0 ? k : k.toFixed(2)} Thousand`;
+    }
+  } else {
+    if (amount >= 1_000_000_000) {
+      const b = amount / 1_000_000_000;
+      return `${b % 1 === 0 ? b : b.toFixed(2)} Billion`;
+    }
+    if (amount >= 1_000_000) {
+      const m = amount / 1_000_000;
+      return `${m % 1 === 0 ? m : m.toFixed(2)} Million`;
+    }
+    if (amount >= 1_000) {
+      const k = amount / 1_000;
+      return `${k % 1 === 0 ? k : k.toFixed(2)} Thousand`;
+    }
+  }
+  return amount.toString();
+}
+
+/**
  * Convert amount from one currency to another using hardcoded rates.
  * All conversions go through INR as the base.
  */

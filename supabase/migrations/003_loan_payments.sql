@@ -50,7 +50,6 @@ CREATE POLICY "Users can delete own loan payments"
   ON public.loan_payments FOR DELETE
   USING (auth.uid() = user_id);
 
--- Trigger: Update loan outstanding when payment is recorded
 CREATE OR REPLACE FUNCTION public.update_loan_outstanding_on_payment()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -58,7 +57,8 @@ SECURITY DEFINER
 AS $$
 BEGIN
   UPDATE public.loans
-  SET current_outstanding = NEW.outstanding_after
+  SET current_outstanding = NEW.outstanding_after,
+      status = CASE WHEN NEW.outstanding_after <= 0 THEN 'closed'::public.loan_status ELSE 'active'::public.loan_status END
   WHERE id = NEW.loan_id;
   RETURN NEW;
 END;
