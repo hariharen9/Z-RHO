@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/Button';
 import { User, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 export function SignupPage() {
   const [fullName, setFullName] = useState('');
@@ -19,6 +20,11 @@ export function SignupPage() {
   const [loading, setLoading] = useState(false);
   const { signUp, signInWithGoogle } = useAuthStore();
   const navigate = useNavigate();
+
+  // PWA/Mobile OAuth Warning States
+  const [showPWAWarning, setShowPWAWarning] = useState(false);
+  const [pwaWarningTitle, setPwaWarningTitle] = useState('');
+  const [pwaWarningMessage, setPwaWarningMessage] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +47,37 @@ export function SignupPage() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = async (force: boolean = false) => {
+    const isStandalone = typeof window !== 'undefined' && (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone
+    );
+    const isLocalIP = typeof window !== 'undefined' && (
+      /^(192\.168|10\.|172\.16)/.test(window.location.hostname) ||
+      window.location.hostname.startsWith('127.') ||
+      window.location.hostname.startsWith('172.')
+    );
+
+    if (!force && (isStandalone || (isLocalIP && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)))) {
+      if (isStandalone) {
+        setPwaWarningTitle('Installed App Auth Guide');
+        setPwaWarningMessage(
+          'Mobile operating systems isolate standard Google Auth external redirects inside installed standalone PWA wrappers. ' +
+          'For a reliable session within the installed app, we highly recommend signing up with your Email & Password. ' +
+          'If you don\'t have a login yet, create one directly, or sign up via standard Safari/Chrome!'
+        );
+      } else {
+        setPwaWarningTitle('Mobile Local Dev Notice');
+        setPwaWarningMessage(
+          `You are testing locally via IP (${window.location.hostname}). ` +
+          `To make Google OAuth redirect back successfully, ensure you have explicitly registered your network IP ` +
+          `"http://${window.location.hostname}:5173/dashboard" as an authorized Redirect URL in your Supabase Auth Console.`
+        );
+      }
+      setShowPWAWarning(true);
+      return;
+    }
+
     const result = await signInWithGoogle();
     if (result.error) setError(result.error);
   };
@@ -202,7 +238,7 @@ export function SignupPage() {
       <motion.div variants={itemVariants}>
         <Button
           variant="secondary"
-          onClick={handleGoogleSignIn}
+          onClick={() => handleGoogleSignIn()}
           className="w-full py-2.5 bg-surface-elevated/35 hover:bg-surface-elevated/70 border border-border/60 hover:border-border text-foreground rounded-xl transition duration-300 font-medium cursor-pointer text-sm flex items-center justify-center gap-2 shadow-sm"
         >
           <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
@@ -234,6 +270,18 @@ export function SignupPage() {
           Sign In
         </Link>
       </motion.div>
+
+      {/* PWA / Mobile Google Auth Warning Dialog */}
+      <ConfirmModal
+        isOpen={showPWAWarning}
+        onClose={() => setShowPWAWarning(false)}
+        onConfirm={() => handleGoogleSignIn(true)}
+        title={pwaWarningTitle}
+        message={pwaWarningMessage}
+        confirmText="Proceed anyway"
+        cancelText="Use Email/Password"
+        variant="warning"
+      />
     </motion.div>
   );
 }

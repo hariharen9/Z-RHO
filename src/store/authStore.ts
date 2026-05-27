@@ -11,6 +11,7 @@ interface AuthState {
   session: Session | null;
   loading: boolean;
   initialized: boolean;
+  isRecoveringPassword: boolean;
 
   // Actions
   initialize: () => Promise<void>;
@@ -19,6 +20,7 @@ interface AuthState {
   signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -26,6 +28,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   loading: true,
   initialized: false,
+  isRecoveringPassword: false,
 
   initialize: async () => {
     try {
@@ -38,11 +41,13 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
 
       // Listen for auth changes
-      supabase.auth.onAuthStateChange((_event, session) => {
+      supabase.auth.onAuthStateChange((event, session) => {
+        const isRecovery = event === 'PASSWORD_RECOVERY';
         set({
           session,
           user: session?.user ?? null,
           loading: false,
+          ...(isRecovery ? { isRecoveringPassword: true } : {}),
         });
       });
     } catch {
@@ -82,13 +87,20 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signOut: async () => {
     await supabase.auth.signOut();
-    set({ user: null, session: null });
+    set({ user: null, session: null, isRecoveringPassword: false });
   },
 
   resetPassword: async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/login`,
     });
+    return { error: error?.message ?? null };
+  },
+
+  updatePassword: async (password) => {
+    set({ loading: true });
+    const { error } = await supabase.auth.updateUser({ password });
+    set({ loading: false, isRecoveringPassword: false });
     return { error: error?.message ?? null };
   },
 }));
