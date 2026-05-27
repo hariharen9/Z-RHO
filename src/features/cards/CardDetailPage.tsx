@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import type { CCTransaction } from '@/types/database.types';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { CardNetworkLogo } from '@/components/shared/CardNetworkLogo';
@@ -8,6 +9,7 @@ import { BankLogo } from '@/components/shared/BankLogo';
 import {
   ArrowLeft,
   Edit,
+  Edit2,
   Trash2,
   Plus,
   X,
@@ -30,11 +32,34 @@ import {
   Check,
 } from 'lucide-react';
 
+const MERCHANT_BRANDING: Record<string, { icon: any; color: string; bg: string }> = {
+  amazon: { icon: ShoppingBag, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  uber: { icon: Plane, color: 'text-white', bg: 'bg-black border border-white/10' },
+  spotify: { icon: Cpu, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+  netflix: { icon: Tv, color: 'text-red-600', bg: 'bg-red-600/10' },
+  apple: { icon: Cpu, color: 'text-slate-300', bg: 'bg-slate-300/10' },
+  google: { icon: Bolt, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  starbucks: { icon: UtensilsCrossed, color: 'text-green-700', bg: 'bg-green-700/10' },
+  swiggy: { icon: UtensilsCrossed, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+  zomato: { icon: UtensilsCrossed, color: 'text-red-500', bg: 'bg-red-500/10' },
+  blinkit: { icon: ShoppingBag, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
+};
+
+const getMerchantBranding = (merchantName: string = '') => {
+  const norm = merchantName.toLowerCase().trim();
+  for (const [key, branding] of Object.entries(MERCHANT_BRANDING)) {
+    if (norm.includes(key)) {
+      return branding;
+    }
+  }
+  return null;
+};
+
 // Hooks & Calculations
 import { useCard, useDeleteCard, useUpdateCard } from '@/hooks/useCards';
-import { useAllCardTransactions, useCreateTransaction, useDeleteTransaction } from '@/hooks/useTransactions';
-import { useBills, useMarkBillPaid } from '@/hooks/useBills';
-import { calculateCCUtilization, calculateCurrentBalance, calculateBillDates, getDueInfo } from '@/lib/calculations';
+import { useAllCardTransactions, useCreateTransaction, useDeleteTransaction, useUpdateTransaction } from '@/hooks/useTransactions';
+import { useBills, useMarkBillPaid, useCreateBill, useUpdateBill } from '@/hooks/useBills';
+import { calculateCCUtilization, calculateCurrentBalance, calculateBillDates, getDueInfo, determineBillingMonth, calculateDaysRemaining } from '@/lib/calculations';
 import { formatCurrency, formatCompactCurrency } from '@/lib/currency';
 import { CARD_NETWORK_LABELS } from '@/lib/constants';
 
@@ -74,6 +99,10 @@ export function CardDetailPage() {
   const updateCard = useUpdateCard();
   const markBillPaid = useMarkBillPaid();
   const deleteTx = useDeleteTransaction();
+  const updateTx = useUpdateTransaction();
+  const createBill = useCreateBill();
+  const updateBill = useUpdateBill();
+  const createTx = useCreateTransaction();
 
   // States
   const [activeTab, setActiveTab] = useState<CardTab>('overview');
@@ -82,6 +111,40 @@ export function CardDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showStatusConfirm, setShowStatusConfirm] = useState(false);
   const [txToDelete, setTxToDelete] = useState<string | null>(null);
+  const [txToEdit, setTxToEdit] = useState<CCTransaction | null>(null);
+
+  // 3D Pointer interactions for Physical Card representation
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [rotate, setRotate] = useState({ x: 0, y: 0 });
+  const [glare, setGlare] = useState({ x: 50, y: 50, opacity: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const cardElement = cardRef.current;
+    if (!cardElement) return;
+    const rect = cardElement.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const px = mouseX / width - 0.5;
+    const py = mouseY / height - 0.5;
+    
+    const rotateX = -py * 16;
+    const rotateY = px * 16;
+    
+    const glareX = (mouseX / width) * 100;
+    const glareY = (mouseY / height) * 100;
+    
+    setRotate({ x: rotateX, y: rotateY });
+    setGlare({ x: glareX, y: glareY, opacity: 0.22 });
+  };
+
+  const handleMouseLeave = () => {
+    setRotate({ x: 0, y: 0 });
+    setGlare(prev => ({ ...prev, opacity: 0 }));
+  };
 
   // Calculate Balances & Ratios
   const currentBalance = useMemo(() => calculateCurrentBalance(transactions), [transactions]);
@@ -95,6 +158,85 @@ export function CardDetailPage() {
     return Math.max(0, card.credit_limit - Math.max(0, currentBalance));
   }, [card, currentBalance]);
 
+  // Automated Background statement synchronizer
+  useEffect(() => {
+    if (!card || transactions.length === 0) return;
+
+    const syncBills = async () => {
+      try {
+        const groups = new Map<string, { spends: number; credits: number }>();
+        
+        for (const t of transactions) {
+          const billingMonth = determineBillingMonth(t.transaction_date, card.statement_day);
+          
+          if (!groups.has(billingMonth)) {
+            groups.set(billingMonth, { spends: 0, credits: 0 });
+          }
+          const group = groups.get(billingMonth)!;
+          
+          if (t.transaction_type === 'debit') {
+            group.spends += t.amount;
+          } else {
+            // Exclude statement payments to prevent mathematical loop count clumping
+            if (t.merchant?.toLowerCase().includes('statement payment')) {
+              continue;
+            }
+            group.credits += t.amount;
+          }
+        }
+
+        for (const [billingMonth, data] of groups.entries()) {
+          const existingBill = bills.find((b) => b.billing_month === billingMonth);
+          const statementAmount = Math.max(0, data.spends - data.credits);
+          const minimumDue = Math.round(statementAmount * 0.05 * 100) / 100;
+
+          if (!existingBill) {
+            await createBill.mutateAsync({
+              card_id: card.id,
+              billing_month: billingMonth,
+              statement_day: card.statement_day,
+              due_day: card.due_day,
+              opening_balance: 0,
+              total_spends: data.spends,
+              total_credits: data.credits,
+              statement_amount: statementAmount,
+              minimum_due: minimumDue,
+              status: statementAmount <= 0 ? 'paid' : 'generated',
+            });
+          } else {
+            const isPaid = existingBill.status === 'paid';
+            const nextStatus = isPaid ? 'paid' : (statementAmount <= 0 ? 'paid' : 'generated');
+            
+            const roundedSpends = Math.round(data.spends * 100) / 100;
+            const roundedCredits = Math.round(data.credits * 100) / 100;
+            const roundedStatement = Math.round(statementAmount * 100) / 100;
+            
+            if (
+              Math.abs(existingBill.total_spends - roundedSpends) > 0.01 ||
+              Math.abs(existingBill.total_credits - roundedCredits) > 0.01 ||
+              Math.abs(existingBill.statement_amount - roundedStatement) > 0.01 ||
+              (existingBill.status !== nextStatus && !isPaid)
+            ) {
+              await updateBill.mutateAsync({
+                bill_id: existingBill.id,
+                card_id: card.id,
+                total_spends: roundedSpends,
+                total_credits: roundedCredits,
+                statement_amount: roundedStatement,
+                minimum_due: minimumDue,
+                status: nextStatus,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to synchronize CC statements:', err);
+      }
+    };
+
+    syncBills();
+  }, [card, transactions, bills]);
+
   // Billing Cycle Computations
   const billingDates = useMemo(() => {
     if (!card) return null;
@@ -104,7 +246,7 @@ export function CardDetailPage() {
       'yyyy-MM-dd'
     );
     const { statementDate, dueDate } = calculateBillDates(card.statement_day, card.due_day, nextBillingMonth);
-    const daysToDue = differenceInDays(new Date(dueDate), now);
+    const daysToDue = calculateDaysRemaining(dueDate);
     return {
       statementDate,
       dueDate,
@@ -227,67 +369,123 @@ export function CardDetailPage() {
       </div>
 
       {/* Credit Card Physical Visualization Frame */}
-      <div
-        className="relative overflow-hidden rounded-3xl p-6 min-h-[220px] flex flex-col justify-between shadow-2xl border border-white/10"
-        style={{
-          background: `linear-gradient(135deg, ${card.color} 0%, color-mix(in oklab, ${card.color} 45%, black) 100%)`,
-        }}
-      >
-        {/* Light sheen layer reflection */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+      <div className="relative w-full flex items-center justify-center">
+        {/* Dynamic Brand backlight Glow Halo */}
+        <div 
+          className="absolute -inset-1 rounded-[32px] blur-3xl opacity-25 transition-all duration-500 pointer-events-none z-0"
+          style={{
+            background: card.color,
+            transform: rotate.x !== 0 ? 'scale(1.1)' : 'scale(1.0)',
+            opacity: rotate.x !== 0 ? 0.4 : 0.25,
+          }}
+        />
 
-        <div className="relative flex items-center justify-between text-white z-10">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-white/10 backdrop-blur border border-white/15 flex items-center justify-center shrink-0">
-              <BankLogo bankName={card.bank} size={20} className="text-white" />
-            </div>
-            <div>
-              <div className="text-sm font-bold tracking-wide leading-tight">{card.name}</div>
-              <div className="text-[10px] uppercase tracking-widest opacity-75 font-semibold font-sans leading-none mt-1">
-                {card.bank}
+        <div
+          ref={cardRef}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          className="relative overflow-hidden rounded-3xl p-6 min-h-[220px] flex flex-col justify-between shadow-2xl border border-white/10 w-full z-10 cursor-pointer"
+          style={{
+            background: `linear-gradient(135deg, ${card.color} 0%, color-mix(in oklab, ${card.color} 45%, black) 100%)`,
+            transform: `perspective(1000px) rotateX(${rotate.x}deg) rotateY(${rotate.y}deg) scale3d(${rotate.x !== 0 ? '1.01' : '1'}, ${rotate.y !== 0 ? '1.01' : '1'}, 1)`,
+            transition: rotate.x === 0 ? 'transform 0.5s ease, box-shadow 0.5s ease, border-color 0.5s ease' : 'transform 0.1s ease-out, box-shadow 0.1s ease-out, border-color 0.1s ease-out',
+            transformStyle: 'preserve-3d',
+            borderColor: rotate.x !== 0 ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
+            boxShadow: rotate.x !== 0 
+              ? `0 30px 60px -15px color-mix(in oklab, ${card.color} 30%, rgba(0,0,0,0.6))` 
+              : '0 15px 35px -10px rgba(0,0,0,0.4)',
+          }}
+        >
+          {/* Specular glare reflection overlay */}
+          <div 
+            className="absolute inset-0 pointer-events-none transition-opacity duration-300 ease-out z-0" 
+            style={{
+              background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,${glare.opacity}), transparent 45%)`,
+            }}
+          />
+          {/* Light sheen layer reflection */}
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.12),transparent_60%)] pointer-events-none" />
+
+          <div className="relative flex items-center justify-between text-white z-10" style={{ transform: 'translateZ(25px)' }}>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-white/10 backdrop-blur border border-white/15 flex items-center justify-center shrink-0">
+                <BankLogo bankName={card.bank} size={20} className="text-white" />
+              </div>
+              <div>
+                <div className="text-sm font-bold tracking-wide leading-tight">{card.name}</div>
+                <div className="text-[10px] uppercase tracking-widest opacity-75 font-semibold font-sans leading-none mt-1">
+                  {card.bank}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="bg-white/10 backdrop-blur border border-white/15 px-3.5 py-2 rounded-xl flex items-center justify-center shrink-0">
-            <CardNetworkLogo network={card.card_network} size={20} className="text-white" />
-          </div>
-        </div>
-
-        <div className="relative flex items-end justify-between text-white mt-8">
-          <div>
-            <div className="text-[9px] uppercase tracking-widest text-white/50 font-semibold">Current Outstanding</div>
-            <div className="text-3xl font-bold tabular">
-              {formatCurrency(Math.max(0, currentBalance), card.currency)}
+            <div className="bg-white/10 backdrop-blur border border-white/15 px-3.5 py-2 rounded-xl flex items-center justify-center shrink-0">
+              <CardNetworkLogo network={card.card_network} size={20} className="text-white" />
             </div>
           </div>
 
-          {/* Billing Cycle Rings Indicator */}
-          {billingDates && (
-            <div className="relative flex h-14 w-14 items-center justify-center">
-              <svg width="56" height="56" className="-rotate-90">
-                <circle cx="28" cy="28" r="24" stroke="rgba(255,255,255,0.06)" strokeWidth="4" fill="none" />
-                <motion.circle
-                  cx="28"
-                  cy="28"
-                  r="24"
-                  stroke={billingDates.daysToDue <= 5 ? 'var(--color-destructive)' : 'rgba(255,255,255,0.7)'}
-                  strokeWidth="4"
-                  fill="none"
-                  strokeDasharray={2 * Math.PI * 24}
-                  initial={{ strokeDashoffset: 2 * Math.PI * 24 }}
-                  animate={{ strokeDashoffset: 2 * Math.PI * 24 * (1 - cycleProgress) }}
-                  transition={{ type: 'spring', stiffness: 60, damping: 18 }}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                <span className={`text-xs font-bold leading-none ${billingDates.daysToDue <= 5 ? 'text-destructive-foreground' : ''}`}>
-                  {billingDates.daysToDue}d
-                </span>
-                <span className="text-[6px] uppercase tracking-widest text-white/50">due</span>
+          <div className="relative flex items-end justify-between text-white mt-8" style={{ transform: 'translateZ(20px)' }}>
+            <div className="flex items-center gap-4">
+              {/* Metal smart chip */}
+              <div className="relative w-9 h-7 rounded-md bg-gradient-to-tr from-amber-400 via-amber-200 to-amber-300 border border-amber-400/30 shadow-[inset_0_1px_2px_rgba(255,255,255,0.4)] flex flex-wrap justify-between p-1 opacity-95 shrink-0 overflow-hidden">
+                <div className="absolute inset-0 grid grid-cols-3 grid-rows-2 gap-[1px] opacity-30 p-[1.5px] pointer-events-none">
+                  <div className="border-r border-b border-black/80 rounded-[1px]" />
+                  <div className="border-r border-b border-black/80" />
+                  <div className="border-b border-black/80 rounded-[1px]" />
+                  <div className="border-r border-black/80 rounded-[1px]" />
+                  <div className="border-r border-black/80" />
+                  <div className="border-black/80 rounded-[1px]" />
+                </div>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-1.5 rounded-[2px] bg-amber-400/90 border border-amber-500/20 shadow-sm" />
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-widest text-white/50 font-semibold">Current Outstanding</div>
+                <div className="text-3xl font-bold tabular">
+                  {formatCurrency(Math.max(0, currentBalance), card.currency)}
+                </div>
               </div>
             </div>
-          )}
+
+            {/* Billing Cycle Rings Indicator */}
+            {billingDates && (
+              <div className="relative flex h-14 w-14 items-center justify-center shrink-0" style={{ transform: 'translateZ(20px)' }}>
+                <svg width="56" height="56" className="-rotate-90">
+                  <circle cx="28" cy="28" r="24" stroke="rgba(255,255,255,0.06)" strokeWidth="4" fill="none" />
+                  <motion.circle
+                    cx="28"
+                    cy="28"
+                    r="24"
+                    stroke={
+                      (!activeBill || activeBill.status === 'paid')
+                        ? 'var(--color-success)'
+                        : billingDates.daysToDue <= 5
+                        ? 'var(--color-destructive)'
+                        : 'rgba(255,255,255,0.7)'
+                    }
+                    strokeWidth="4"
+                    fill="none"
+                    strokeDasharray={2 * Math.PI * 24}
+                    initial={{ strokeDashoffset: 2 * Math.PI * 24 }}
+                    animate={{ strokeDashoffset: 2 * Math.PI * 24 * (1 - ((!activeBill || activeBill.status === 'paid') ? 1 : cycleProgress)) }}
+                    transition={{ type: 'spring', stiffness: 60, damping: 18 }}
+                    strokeLinecap="round"
+                    className={(!activeBill || activeBill.status === 'paid') ? '' : billingDates.daysToDue <= 5 ? 'animate-[pulse_1.5s_infinite]' : ''}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                  {(!activeBill || activeBill.status === 'paid') ? (
+                    <Check size={18} className="text-white bg-white/20 p-0.5 rounded-full stroke-[3px]" />
+                  ) : (
+                    <>
+                      <span className={`text-xs font-bold leading-none ${billingDates.daysToDue <= 5 ? 'text-destructive-foreground animate-pulse' : ''}`}>
+                        {billingDates.daysToDue}d
+                      </span>
+                      <span className="text-[6px] uppercase tracking-widest text-white/50">due</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -318,14 +516,12 @@ export function CardDetailPage() {
           <Plus size={13} /> Add Transaction
         </button>
 
-        {activeBill && activeBill.status !== 'paid' && (
-          <button
-            onClick={() => setShowPayBill(true)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-surface border border-border py-3.5 text-xs font-semibold text-foreground transition hover:bg-surface-elevated active:scale-[0.98]"
-          >
-            <CircleDollarSign size={13} className="text-success" /> Clear Statement
-          </button>
-        )}
+        <button
+          onClick={() => setShowPayBill(true)}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-surface border border-border py-3.5 text-xs font-semibold text-foreground transition hover:bg-surface-elevated active:scale-[0.98] cursor-pointer"
+        >
+          <CircleDollarSign size={13} className="text-success" /> Record Repayment
+        </button>
 
         <button
           onClick={handleToggleStatus}
@@ -398,13 +594,17 @@ export function CardDetailPage() {
                   {bills.map((bill) => {
                     const monthDate = bill.billing_month ? parseISO(bill.billing_month) : new Date();
                     return (
-                      <div key={bill.id} className="flex items-center justify-between px-5 py-3.5 text-xs">
+                      <Link
+                        key={bill.id}
+                        to={`/cards/${card.id}/bill/${bill.id}`}
+                        className="flex items-center justify-between px-5 py-3.5 hover:bg-surface-elevated transition-colors text-xs text-left block"
+                      >
                         <div>
                           <div className="font-semibold text-foreground">{format(monthDate, 'MMMM yyyy')}</div>
                           <div className="text-[10px] text-muted-foreground mt-0.5">
                             Due: {format(parseISO(bill.due_date), 'd MMM')} · status:{' '}
                             <span className={bill.status === 'paid' ? 'text-success font-medium' : 'text-warning font-medium'}>
-                              {bill.status}
+                              {bill.status.replace('_', ' ')}
                             </span>
                           </div>
                         </div>
@@ -418,7 +618,7 @@ export function CardDetailPage() {
                             </div>
                           )}
                         </div>
-                      </div>
+                      </Link>
                     );
                   })}
                   {bills.length === 0 && (
@@ -441,43 +641,67 @@ export function CardDetailPage() {
               className="space-y-3"
             >
               <div className="divide-y divide-border overflow-hidden rounded-3xl border border-border bg-surface">
-                {transactions.map((t) => {
-                  const Icon = CATEGORY_ICONS[t.category] ?? MoreHorizontal;
-                  const isDebit = t.transaction_type === 'debit';
-                  return (
-                    <div key={t.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-elevated transition">
-                      <div
-                        className={`grid h-9 w-9 place-items-center rounded-full ${
-                          isDebit ? 'bg-secondary text-muted-foreground' : 'bg-success/10 text-success'
-                        }`}
-                      >
-                        <Icon size={14} strokeWidth={2} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="truncate text-sm font-medium text-foreground">{t.merchant ?? 'General Entry'}</div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">
-                          {t.category} · {format(parseISO(t.transaction_date), 'd MMM yyyy')}
-                        </div>
-                      </div>
-                      <div className="text-right flex items-center gap-3">
-                        <div>
-                          <div className={`text-sm font-semibold tabular ${isDebit ? 'text-foreground' : 'text-success'}`}>
-                            {isDebit ? '−' : '+'}
-                            {formatCurrency(t.amount, card.currency)}
-                          </div>
-                          {t.note && <div className="text-[10px] text-muted-foreground truncate max-w-[120px] mt-0.5">{t.note}</div>}
-                        </div>
-                        <button
-                          onClick={() => handleDeleteTransaction(t.id)}
-                          className="p-1 rounded-md hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition opacity-0 group-hover:opacity-100 lg:opacity-100"
-                          title="Delete transaction"
+                <LayoutGroup>
+                  <AnimatePresence mode="popLayout">
+                    {transactions.map((t) => {
+                      const branding = getMerchantBranding(t.merchant);
+                      const Icon = branding?.icon ?? (CATEGORY_ICONS[t.category] ?? MoreHorizontal);
+                      const isDebit = t.transaction_type === 'debit';
+                      return (
+                        <motion.div
+                          layout
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.96 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                          key={t.id}
+                          className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-elevated transition group"
                         >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                          <div
+                            className={`grid h-9 w-9 place-items-center rounded-full shrink-0 ${
+                              branding 
+                                ? `${branding.bg} ${branding.color}`
+                                : isDebit 
+                                ? 'bg-secondary text-muted-foreground' 
+                                : 'bg-success/10 text-success'
+                            }`}
+                          >
+                            <Icon size={14} strokeWidth={2} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="truncate text-sm font-medium text-foreground">{t.merchant ?? 'General Entry'}</div>
+                            <div className="text-[10px] text-muted-foreground mt-0.5">
+                              {t.category} · {format(parseISO(t.transaction_date), 'd MMM yyyy')}
+                            </div>
+                          </div>
+                          <div className="text-right flex items-center gap-2">
+                            <div>
+                              <div className={`text-sm font-semibold tabular ${isDebit ? 'text-foreground' : 'text-success'}`}>
+                                {isDebit ? '−' : '+'}
+                                {formatCurrency(t.amount, card.currency)}
+                              </div>
+                              {t.note && <div className="text-[10px] text-muted-foreground truncate max-w-[120px] mt-0.5">{t.note}</div>}
+                            </div>
+                            <button
+                              onClick={() => setTxToEdit(t)}
+                              className="p-1 rounded-md hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition opacity-0 group-hover:opacity-100 lg:opacity-100"
+                              title="Edit transaction"
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTransaction(t.id)}
+                              className="p-1 rounded-md hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition opacity-0 group-hover:opacity-100 lg:opacity-100"
+                              title="Delete transaction"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </LayoutGroup>
                 {transactions.length === 0 && (
                   <div className="p-12 text-center text-xs text-muted-foreground">
                     No transaction entries recorded yet. Click "+ Add Transaction" to log spends.
@@ -568,20 +792,63 @@ export function CardDetailPage() {
         )}
       </AnimatePresence>
 
-      {/* POPUP MODAL 2: CLEAR CC BILL STATEMENT */}
+      {/* POPUP MODAL 2: EDIT TRANSACTION */}
       <AnimatePresence>
-        {showPayBill && activeBill && (
+        {txToEdit && (
+          <EditTxDialog
+            card={card}
+            transaction={txToEdit}
+            onClose={() => setTxToEdit(null)}
+            onSave={async (updates) => {
+              const newBillingMonth = updates.transaction_date
+                ? determineBillingMonth(updates.transaction_date, card.statement_day)
+                : txToEdit.billing_month;
+              await updateTx.mutateAsync({
+                id: txToEdit.id,
+                card_id: card.id,
+                ...updates,
+                billing_month: newBillingMonth,
+              });
+              setTxToEdit(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* POPUP MODAL 3: RECORD CC REPAYMENT */}
+      <AnimatePresence>
+        {showPayBill && (
           <PayBillDialog
             card={card}
-            bill={activeBill}
+            bill={activeBill || {
+              id: 'custom',
+              statement_amount: Math.max(0, currentBalance),
+              billing_month: format(new Date(), 'yyyy-MM-dd'),
+            }}
             onClose={() => setShowPayBill(false)}
             onConfirm={async (amountPaid, datePaid) => {
-              await markBillPaid.mutateAsync({
-                bill_id: activeBill.id,
+              // 1. Update bill statement status to Paid if an active bill is present
+              if (activeBill) {
+                await markBillPaid.mutateAsync({
+                  bill_id: activeBill.id,
+                  card_id: card.id,
+                  paid_amount: amountPaid,
+                  paid_date: datePaid,
+                  statement_amount: activeBill.statement_amount,
+                });
+              }
+              // 2. Automatically log matching credit transaction to reduce balance
+              await createTx.mutateAsync({
                 card_id: card.id,
-                paid_amount: amountPaid,
-                paid_date: datePaid,
-                statement_amount: activeBill.statement_amount,
+                amount: amountPaid,
+                transaction_type: 'credit',
+                category: 'Bills & Utilities',
+                merchant: `Statement Payment — ${card.bank}`,
+                note: activeBill 
+                  ? `Cleared statement for ${format(parseISO(activeBill.billing_month), 'MMMM yyyy')}`
+                  : `Custom repayment / prepayment settlement`,
+                transaction_date: datePaid,
+                statement_day: card.statement_day,
               });
               setShowPayBill(false);
             }}
@@ -773,6 +1040,7 @@ function AddTxDialog({ card, onClose, statementDay }: { card: any; onClose: () =
               label="Transaction Date"
               value={date}
               onChange={setDate}
+              dropUp
             />
             <div className="rounded-2xl border border-border bg-background p-3.5 flex flex-col justify-center">
               <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
@@ -855,6 +1123,7 @@ function PayBillDialog({ card, bill, onClose, onConfirm }: { card: any; bill: an
             label="Payment Record Date"
             value={payDate}
             onChange={setPayDate}
+            dropUp
           />
         </div>
 
@@ -864,6 +1133,173 @@ function PayBillDialog({ card, bill, onClose, onConfirm }: { card: any; bill: an
           className="mt-5 w-full rounded-2xl bg-foreground py-4 text-xs font-bold text-background transition hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
         >
           Confirm Statement Settlement
+        </button>
+      </motion.div>
+    </div>
+  );
+}
+
+/* ---------------- DIALOG 3: EDIT TRANSACTION SHEET ---------------- */
+
+function EditTxDialog({
+  card,
+  transaction,
+  onClose,
+  onSave,
+}: {
+  card: any;
+  transaction: CCTransaction;
+  onClose: () => void;
+  onSave: (updates: Partial<CCTransaction>) => Promise<void>;
+}) {
+  const [amount, setAmount] = useState(transaction.amount.toString());
+  const [txType, setTxType] = useState<'debit' | 'credit'>(transaction.transaction_type as 'debit' | 'credit');
+  const [category, setCategory] = useState(transaction.category);
+  const [merchant, setMerchant] = useState(transaction.merchant ?? '');
+  const [note, setNote] = useState(transaction.note ?? '');
+  const [date, setDate] = useState(transaction.transaction_date);
+  const [saving, setSaving] = useState(false);
+
+  const valid = amount && parseFloat(amount) > 0 && merchant.trim();
+
+  const submit = async () => {
+    if (!valid) return;
+    setSaving(true);
+    try {
+      await onSave({
+        amount: parseFloat(amount),
+        transaction_type: txType,
+        category,
+        merchant: merchant.trim(),
+        note: note.trim() || null,
+        transaction_date: date,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center">
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} />
+
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+        className="relative z-10 w-full max-w-lg rounded-t-3xl border border-border bg-surface p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl"
+      >
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-border" />
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-base font-bold text-foreground">Edit Transaction</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X size={16} />
+          </button>
+        </div>
+        <p className="text-[10px] text-muted-foreground mb-4">
+          ID: <span className="font-mono">{transaction.id.slice(0, 8)}…</span>
+        </p>
+
+        {/* Type Toggles */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setTxType('debit')}
+            className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition ${
+              txType === 'debit'
+                ? 'border-destructive/40 bg-destructive/10 text-red-400'
+                : 'border-border bg-background text-muted-foreground'
+            }`}
+          >
+            Debit (Spend)
+          </button>
+          <button
+            onClick={() => setTxType('credit')}
+            className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition ${
+              txType === 'credit'
+                ? 'border-success/40 bg-success/10 text-success'
+                : 'border-border bg-background text-muted-foreground'
+            }`}
+          >
+            Credit (Refund/Payment)
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {/* Amount */}
+          <div className="rounded-2xl border border-border bg-background p-4">
+            <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-semibold">Amount</div>
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-muted-foreground font-semibold">{card.currency}</span>
+              <input
+                autoFocus
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full bg-transparent text-2xl font-bold tabular outline-none text-foreground"
+              />
+            </div>
+          </div>
+
+          {/* Category */}
+          <div className="rounded-2xl border border-border bg-background p-3.5">
+            <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
+              Category
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full bg-transparent text-sm outline-none text-foreground"
+            >
+              {Object.keys(CATEGORY_ICONS).map((cat) => (
+                <option key={cat} value={cat} className="bg-surface">
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Merchant */}
+          <div className="rounded-2xl border border-border bg-background p-3.5">
+            <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
+              Merchant / Payee
+            </label>
+            <input
+              placeholder="e.g. Amazon, Uber, Blinkit"
+              value={merchant}
+              onChange={(e) => setMerchant(e.target.value)}
+              className="w-full bg-transparent text-sm outline-none text-foreground placeholder:text-muted-foreground/30"
+            />
+          </div>
+
+          {/* Date + Note */}
+          <div className="grid grid-cols-2 gap-3">
+            <DatePicker
+              label="Transaction Date"
+              value={date}
+              onChange={setDate}
+              dropUp
+            />
+            <div className="rounded-2xl border border-border bg-background p-3.5 flex flex-col justify-center">
+              <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
+                Short Notes
+              </label>
+              <input
+                placeholder="Details..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="w-full bg-transparent text-xs outline-none text-foreground placeholder:text-muted-foreground/30"
+              />
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={submit}
+          disabled={!valid || saving}
+          className="mt-5 w-full rounded-2xl bg-foreground py-4 text-xs font-bold text-background transition hover:opacity-90 active:scale-[0.98] disabled:opacity-40"
+        >
+          {saving ? 'Saving…' : 'Save Changes'}
         </button>
       </motion.div>
     </div>

@@ -2,7 +2,7 @@
 // ZRHO — Cards: Add/Edit Card Form
 // ============================================================
 
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -67,6 +67,38 @@ export function CardForm() {
   const { id } = useParams();
   const isEdit = !!id;
   const navigate = useNavigate();
+  
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [rotate, setRotate] = useState({ x: 0, y: 0 });
+  const [glare, setGlare] = useState({ x: 50, y: 50, opacity: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const cardElement = cardRef.current;
+    if (!cardElement) return;
+    const rect = cardElement.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const px = mouseX / width - 0.5;
+    const py = mouseY / height - 0.5;
+    
+    const rotateX = -py * 20;
+    const rotateY = px * 20;
+    
+    const glareX = (mouseX / width) * 100;
+    const glareY = (mouseY / height) * 100;
+    
+    setRotate({ x: rotateX, y: rotateY });
+    setGlare({ x: glareX, y: glareY, opacity: 0.28 });
+  };
+
+  const handleMouseLeave = () => {
+    setRotate({ x: 0, y: 0 });
+    setGlare(prev => ({ ...prev, opacity: 0 }));
+  };
 
   const { data: existingCard } = useCard(id);
   const createCard = useCreateCard();
@@ -363,57 +395,94 @@ export function CardForm() {
 
             {/* MOCK CREDIT CARD DISPLAY */}
             <AnimatePresence mode="wait">
-              <motion.div
-                key={watchColor}
-                style={{ background: gradientBg }}
-                className="relative h-48 w-full max-w-sm rounded-3xl p-6 text-white shadow-2xl flex flex-col justify-between overflow-hidden border border-white/10 card-shine"
-                initial={{ scale: 0.96, opacity: 0, y: 6 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.96, opacity: 0, y: -6 }}
-                transition={{ type: 'spring', stiffness: 350, damping: 26 }}
-              >
-                {/* Gloss lighting layer reflection */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.18),transparent_60%)] pointer-events-none" />
+              <div className="relative w-full max-w-sm flex items-center justify-center">
+                {/* Dynamic Brand backlight Glow Halo */}
+                <div 
+                  className="absolute -inset-2 rounded-[32px] blur-3xl opacity-20 transition-all duration-500 pointer-events-none"
+                  style={{
+                    background: watchColor,
+                    transform: rotate.x !== 0 ? 'scale(1.15)' : 'scale(1.0)',
+                    opacity: rotate.x !== 0 ? 0.35 : 0.20,
+                  }}
+                />
+                
+                <motion.div
+                  ref={cardRef}
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={handleMouseLeave}
+                  key={watchColor}
+                  style={{ 
+                    background: gradientBg,
+                    transform: `perspective(1000px) rotateX(${rotate.x}deg) rotateY(${rotate.y}deg) scale3d(${rotate.x !== 0 ? '1.02' : '1'}, ${rotate.y !== 0 ? '1.02' : '1'}, 1)`,
+                    transition: rotate.x === 0 ? 'transform 0.5s ease, box-shadow 0.5s ease' : 'transform 0.1s ease-out, box-shadow 0.1s ease-out',
+                    transformStyle: 'preserve-3d',
+                    boxShadow: rotate.x !== 0 
+                      ? `0 25px 50px -12px color-mix(in oklab, ${watchColor} 30%, rgba(0,0,0,0.5))` 
+                      : '0 10px 25px -5px rgba(0,0,0,0.3)',
+                  }}
+                  className="relative h-48 w-full max-w-sm rounded-3xl p-6 text-white shadow-2xl flex flex-col justify-between overflow-hidden border border-white/10 card-shine cursor-pointer"
+                  initial={{ scale: 0.96, opacity: 0, y: 6 }}
+                  animate={{ scale: 1, opacity: 1, y: 0 }}
+                  exit={{ scale: 0.96, opacity: 0, y: -6 }}
+                  transition={{ type: 'spring', stiffness: 350, damping: 26 }}
+                >
+                  {/* Gloss lighting layer reflection (Dynamic Glare follow) */}
+                  <div 
+                    className="absolute inset-0 pointer-events-none transition-opacity duration-300 ease-out" 
+                    style={{
+                      background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,${glare.opacity}), transparent 45%)`,
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.12),transparent_60%)] pointer-events-none" />
 
-                <div className="flex justify-between items-start z-10">
-                  <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-xl bg-white/10 backdrop-blur border border-white/15 flex items-center justify-center shrink-0">
-                      <BankLogo bankName={watchBank} size={18} className="text-white" />
+                  <div className="flex justify-between items-start z-10" style={{ transform: 'translateZ(25px)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl bg-white/10 backdrop-blur border border-white/15 flex items-center justify-center shrink-0">
+                        <BankLogo bankName={watchBank} size={18} className="text-white" />
+                      </div>
+                      <div>
+                        <div className="text-[9px] uppercase tracking-widest opacity-75 font-semibold font-sans leading-none">{watchBank}</div>
+                        <div className="text-sm font-bold mt-0.5 tracking-wide leading-tight">{watchName}</div>
+                      </div>
                     </div>
+                    <div className="bg-white/10 backdrop-blur border border-white/15 px-3 py-1.5 rounded-xl flex items-center justify-center shrink-0">
+                      <CardNetworkLogo network={watchNetwork} size={18} className="text-white" />
+                    </div>
+                  </div>
+
+                  <div className="z-10 mt-6 flex justify-start items-center gap-4" style={{ transform: 'translateZ(20px)' }}>
+                    {/* Metal smart chip */}
+                    <div className="relative w-8 h-6 rounded-md bg-gradient-to-tr from-amber-400 via-amber-200 to-amber-300 border border-amber-400/30 shadow-[inset_0_1px_2px_rgba(255,255,255,0.4)] flex flex-wrap justify-between p-1 opacity-95 shrink-0 overflow-hidden">
+                      {/* Micro lines representing chip contact plates */}
+                      <div className="absolute inset-0 grid grid-cols-3 grid-rows-2 gap-[1px] opacity-30 p-[1.5px] pointer-events-none">
+                        <div className="border-r border-b border-black/80 rounded-[1px]" />
+                        <div className="border-r border-b border-black/80" />
+                        <div className="border-b border-black/80 rounded-[1px]" />
+                        <div className="border-r border-black/80 rounded-[1px]" />
+                        <div className="border-r border-black/80" />
+                        <div className="border-black/80 rounded-[1px]" />
+                      </div>
+                      {/* Subtle center gold connection pad */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-1.5 rounded-[2px] bg-amber-400/90 border border-amber-500/20 shadow-sm" />
+                    </div>
+                    <div className="text-lg tracking-[0.25em] font-mono tabular select-none">
+                      •••• •••• •••• {watchLastFour}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-end z-10 font-sans" style={{ transform: 'translateZ(15px)' }}>
                     <div>
-                      <div className="text-[9px] uppercase tracking-widest opacity-75 font-semibold font-sans leading-none">{watchBank}</div>
-                      <div className="text-sm font-bold mt-0.5 tracking-wide leading-tight">{watchName}</div>
+                      <div className="text-[8px] uppercase tracking-widest opacity-60 font-semibold">Credit Limit</div>
+                      <div className="text-sm font-bold mt-0.5 font-mono tabular">
+                        {watchLimit > 0 ? `${watchCurrency} ${watchLimit.toLocaleString()}` : '—'}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <Heart size={14} className="text-red-500 fill-red-500 animate-pulse" />
                     </div>
                   </div>
-                  <div className="bg-white/10 backdrop-blur border border-white/15 px-3 py-1.5 rounded-xl flex items-center justify-center shrink-0">
-                    <CardNetworkLogo network={watchNetwork} size={18} className="text-white" />
-                  </div>
-                </div>
-
-                <div className="z-10 mt-6 flex justify-start items-center gap-4">
-                  {/* Metal Smart Chip Mock */}
-                  <div className="w-10 h-7.5 rounded-lg bg-gradient-to-tr from-amber-200/50 to-amber-400/30 border border-amber-300/20 backdrop-blur flex flex-col justify-center px-1.5 space-y-0.5 select-none opacity-95 shrink-0">
-                    <span className="h-0.5 bg-black/15 w-full rounded" />
-                    <span className="h-0.5 bg-black/15 w-full rounded" />
-                    <span className="h-0.5 bg-black/15 w-full rounded" />
-                  </div>
-                  <div className="text-lg tracking-[0.25em] font-mono tabular select-none">
-                    •••• •••• •••• {watchLastFour}
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-end z-10 font-sans">
-                  <div>
-                    <div className="text-[8px] uppercase tracking-widest opacity-60">Credit Limit</div>
-                    <div className="text-sm font-bold mt-0.5 font-mono tabular">
-                      {watchLimit > 0 ? `${watchCurrency} ${watchLimit.toLocaleString()}` : '—'}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <Heart size={14} className="text-red-500 fill-red-500 animate-pulse" />
-                  </div>
-                </div>
-              </motion.div>
+                </motion.div>
+              </div>
             </AnimatePresence>
 
             {/* Privacy Badge */}

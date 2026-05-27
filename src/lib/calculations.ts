@@ -406,6 +406,22 @@ export function calculateBillDates(
   };
 }
 
+/**
+ * Calculate the difference in calendar days from today to a target date string ("yyyy-MM-dd"),
+ * completely immune to UTC timezone offset shifts.
+ */
+export function calculateDaysRemaining(targetDateStr: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [year, month, day] = targetDateStr.split('-').map(Number);
+  const target = new Date(year, month - 1, day);
+  target.setHours(0, 0, 0, 0);
+
+  const diffMs = target.getTime() - today.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
 // ============================================================
 // DUE DATE LOGIC
 // ============================================================
@@ -418,13 +434,8 @@ export function getDueInfo(dueDate: string | Date): {
   label: string;
   status: 'safe' | 'warning' | 'danger' | 'overdue';
 } {
-  const due = typeof dueDate === 'string' ? parseISO(dueDate) : new Date(dueDate);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-
-  const diffMs = due.getTime() - today.getTime();
-  const daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const dateStr = typeof dueDate === 'string' ? dueDate : format(dueDate, 'yyyy-MM-dd');
+  const daysRemaining = calculateDaysRemaining(dateStr);
 
   if (daysRemaining < 0) {
     return {

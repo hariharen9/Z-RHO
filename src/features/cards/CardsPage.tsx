@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, CreditCard, Check, Zap, Calendar, TrendingDown } from 'lucide-react';
 import { useCards } from '@/hooks/useCards';
 import { useAllCardTransactions } from '@/hooks/useTransactions';
 import { useBills } from '@/hooks/useBills';
-import { calculateCCUtilization, calculateCurrentBalance, calculateBillDates, getDueInfo } from '@/lib/calculations';
+import { calculateCCUtilization, calculateCurrentBalance, calculateBillDates, getDueInfo, calculateDaysRemaining } from '@/lib/calculations';
 import { formatCurrency, formatCompactCurrency } from '@/lib/currency';
 import { CARD_NETWORK_LABELS } from '@/lib/constants';
 import { Progress } from '@/components/shared/Progress';
@@ -140,9 +140,42 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
     'yyyy-MM-dd'
   );
   const { dueDate } = calculateBillDates(card.statement_day, card.due_day, nextBillingMonth);
-  const daysToDue = differenceInDays(new Date(dueDate), now);
+  const daysToDue = calculateDaysRemaining(dueDate);
 
   const urgentDue = daysToDue <= 5;
+
+  // 3D Pointer interactions
+  const cardRef = useRef<HTMLAnchorElement>(null);
+  const [rotate, setRotate] = useState({ x: 0, y: 0 });
+  const [glare, setGlare] = useState({ x: 50, y: 50, opacity: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    const cardElement = cardRef.current;
+    if (!cardElement) return;
+    const rect = cardElement.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const px = mouseX / width - 0.5;
+    const py = mouseY / height - 0.5;
+    
+    const rotateX = -py * 16;
+    const rotateY = px * 16;
+    
+    const glareX = (mouseX / width) * 100;
+    const glareY = (mouseY / height) * 100;
+    
+    setRotate({ x: rotateX, y: rotateY });
+    setGlare({ x: glareX, y: glareY, opacity: 0.22 });
+  };
+
+  const handleMouseLeave = () => {
+    setRotate({ x: 0, y: 0 });
+    setGlare(prev => ({ ...prev, opacity: 0 }));
+  };
 
   return (
     <motion.div
@@ -156,21 +189,48 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
         damping: 34,
         opacity: { duration: 0.2 }
       }}
+      className="relative flex items-center justify-center"
     >
-      <Link
-        to={`/cards/${card.id}`}
-        className="group relative block overflow-hidden rounded-3xl border border-border p-5 text-left transition hover:-translate-y-0.5 hover:border-foreground/30 flex flex-col justify-between min-h-[210px] w-full"
+      {/* Dynamic Brand Backlight Glow Halo */}
+      <div 
+        className="absolute -inset-1 rounded-[32px] blur-3xl opacity-20 transition-all duration-500 pointer-events-none z-0"
         style={{
-          background: `radial-gradient(130% 70% at 0% 0%, ${card.color} 30%, ${card.color}bb 100%)`,
+          background: card.color,
+          transform: rotate.x !== 0 ? 'scale(1.15)' : 'scale(1.0)',
+          opacity: rotate.x !== 0 ? 0.35 : 0.20,
+        }}
+      />
+
+      <Link
+        ref={cardRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        to={`/cards/${card.id}`}
+        className="group relative block overflow-hidden rounded-3xl border border-border p-5 text-left transition flex flex-col justify-between min-h-[210px] w-full z-10"
+        style={{
+          background: `radial-gradient(130% 70% at 0% 0%, ${card.color} 30%, color-mix(in oklab, ${card.color} 50%, black) 100%)`,
+          transform: `perspective(1000px) rotateX(${rotate.x}deg) rotateY(${rotate.y}deg) scale3d(${rotate.x !== 0 ? '1.02' : '1'}, ${rotate.y !== 0 ? '1.02' : '1'}, 1)`,
+          transition: rotate.x === 0 ? 'transform 0.5s ease, box-shadow 0.5s ease, border-color 0.5s ease' : 'transform 0.1s ease-out, box-shadow 0.1s ease-out, border-color 0.1s ease-out',
+          transformStyle: 'preserve-3d',
+          borderColor: rotate.x !== 0 ? 'rgba(255,255,255,0.25)' : 'var(--color-border)',
+          boxShadow: rotate.x !== 0 
+            ? `0 20px 40px -12px color-mix(in oklab, ${card.color} 35%, rgba(0,0,0,0.6))` 
+            : '0 8px 24px -8px rgba(0,0,0,0.4)',
         }}
       >
-        {/* Ambient Top Glow reflection */}
-        <div className="pointer-events-none absolute inset-0 opacity-40 bg-gradient-to-br from-white/10 to-transparent" />
+        {/* Specular glare reflection overlay */}
+        <div 
+          className="absolute inset-0 pointer-events-none transition-opacity duration-300 ease-out z-0" 
+          style={{
+            background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,${glare.opacity}), transparent 45%)`,
+          }}
+        />
+        <div className="pointer-events-none absolute inset-0 opacity-20 bg-gradient-to-br from-white/10 to-transparent" />
 
         {/* Card Identity */}
-        <div className="relative z-10 flex items-start justify-between">
+        <div className="relative z-10 flex items-start justify-between" style={{ transform: 'translateZ(25px)' }}>
           <div>
-            <div className="text-sm font-semibold tracking-wide text-white group-hover:text-white/90">
+            <div className="text-sm font-semibold tracking-wide text-white group-hover:text-white/95">
               {card.name}
             </div>
             <div className="mt-0.5 text-[9px] uppercase tracking-[0.2em] text-white/50">
@@ -191,7 +251,7 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
         </div>
 
         {/* Financial Outstanding Balances */}
-        <div className="relative z-10 mt-8 flex items-end justify-between">
+        <div className="relative z-10 mt-8 flex items-end justify-between" style={{ transform: 'translateZ(20px)' }}>
           <div>
             <div className="text-[9px] uppercase tracking-widest text-white/40 font-semibold">Current balance</div>
             <div className="text-2xl font-bold tabular text-white">
@@ -207,7 +267,7 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
         </div>
 
         {/* Progress Bar (Repayment/Utilization) */}
-        <div className="relative z-10 mt-4">
+        <div className="relative z-10 mt-4" style={{ transform: 'translateZ(15px)' }}>
           <Progress
             value={utilizationRate}
             height={4}

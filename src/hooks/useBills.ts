@@ -182,3 +182,42 @@ export function useMarkBillPaid() {
     },
   });
 }
+
+/**
+ * Update an existing bill statement's amounts and status.
+ */
+export function useUpdateBill() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: {
+      bill_id: string;
+      card_id: string;
+      total_spends: number;
+      total_credits: number;
+      statement_amount: number;
+      minimum_due: number;
+      status?: BillStatus;
+    }) => {
+      const { data, error } = await supabase
+        .from('cc_bills')
+        .update({
+          total_spends: input.total_spends,
+          total_credits: input.total_credits,
+          statement_amount: input.statement_amount,
+          minimum_due: input.minimum_due,
+          ...(input.status ? { status: input.status } : {}),
+        })
+        .eq('id', input.bill_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as CCBill;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [BILLS_KEY, variables.card_id] });
+      queryClient.invalidateQueries({ queryKey: [BILLS_KEY, 'detail', variables.bill_id] });
+    },
+  });
+}

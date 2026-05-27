@@ -108,6 +108,19 @@ export function AppLayout() {
   const { data: upcoming = [] } = useUpcomingPayments();
   const urgentPayments = upcoming.filter((p) => p.daysRemaining <= 7);
 
+  // Live ticking clock state
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const liveTime = format(currentTime, 'EEE, d MMM yyyy · hh:mm:ss a');
+  const liveTimeMobile = format(currentTime, 'hh:mm a');
+
   // Determine section label for breadcrumbs
   const getBreadcrumbs = () => {
     if (currentPath.startsWith('/dashboard')) return { section: 'Dashboard', sub: 'Live' };
@@ -129,11 +142,17 @@ export function AppLayout() {
         
         {/* Desktop Top Header Bar */}
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/70 px-8 py-4 backdrop-blur-xl max-lg:hidden">
-          {/* Breadcrumbs */}
-          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-            <span>{breadcrumbs.section}</span>
-            <span>·</span>
-            <span className="text-foreground">{breadcrumbs.sub}</span>
+          {/* Breadcrumbs & Live Ticking Clock */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
+              <span>{breadcrumbs.section}</span>
+              <span>·</span>
+              <span className="text-foreground">{breadcrumbs.sub}</span>
+            </div>
+            <span className="text-border">|</span>
+            <div className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/80 font-mono select-none">
+              {liveTime}
+            </div>
           </div>
 
           {/* Right side controls */}
@@ -171,7 +190,11 @@ export function AppLayout() {
             </div>
             <div>
               <div className="text-sm font-semibold tracking-[0.2em] text-foreground">Z-RHO</div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Liability engine</div>
+              <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-muted-foreground mt-0.5">
+                <span>Liability engine</span>
+                <span>·</span>
+                <span className="font-mono font-semibold text-foreground/85">{liveTimeMobile}</span>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">

@@ -12,6 +12,7 @@ interface DatePickerProps {
   onChange: (value: string) => void;
   className?: string;
   error?: string;
+  dropUp?: boolean; // When true, calendar opens above the trigger (use in bottom-anchored sheets)
 }
 
 // Month names helper
@@ -28,6 +29,7 @@ export function DatePicker({
   onChange,
   className = '',
   error,
+  dropUp = false,
 }: DatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -154,11 +156,13 @@ export function DatePicker({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+            initial={{ opacity: 0, y: dropUp ? 8 : -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            exit={{ opacity: 0, y: dropUp ? 8 : -8, scale: 0.98 }}
             transition={{ duration: 0.18, type: 'spring', stiffness: 300, damping: 25 }}
-            className="absolute z-50 w-[290px] mt-2 rounded-2xl border border-border bg-surface p-4 shadow-2xl backdrop-blur-xl select-none"
+            className={`absolute z-50 w-[290px] rounded-2xl border border-border bg-surface p-4 shadow-2xl backdrop-blur-xl select-none ${
+              dropUp ? 'bottom-full mb-2' : 'mt-2'
+            }`}
           >
             {/* Header controls */}
             <div className="flex items-center justify-between mb-3.5">
