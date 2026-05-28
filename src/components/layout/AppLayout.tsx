@@ -208,6 +208,16 @@ export function AppLayout() {
           </div>
           <div className="flex items-center gap-2">
             <NotificationBell urgentPayments={urgentPayments} navigate={navigate} />
+
+            {/* New Entry - quick CC Transaction (mobile) */}
+            <button
+              onClick={() => setNewTxOpen(true)}
+              className="flex items-center justify-center rounded-full bg-foreground h-8 w-8 text-background transition hover:opacity-90 active:scale-95"
+              title="New transaction"
+            >
+              <Plus size={14} strokeWidth={2.5} />
+            </button>
+
             <Link
               to="/settings"
               className="h-8 w-8 rounded-full border border-border bg-gradient-to-br from-secondary to-background transition hover:scale-105 active:scale-95 flex items-center justify-center text-xs font-medium uppercase overflow-hidden"
