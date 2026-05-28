@@ -61,8 +61,8 @@ export function DashboardPage() {
   const { data: upcoming = [] } = useUpcomingPayments();
   const { data: loans = [], isLoading: loansLoading } = useLoans('active');
   const { data: cards = [], isLoading: cardsLoading } = useCards('active');
-  const { data: debtHistory = [], isLoading: historyLoading } = useDebtHistory();
-  const { data: outflow = [], isLoading: outflowLoading } = useMonthlyOutflow();
+  const { data: debtHistory = [], isLoading: historyLoading } = useDebtHistory(currency);
+  const { data: outflow = [], isLoading: outflowLoading } = useMonthlyOutflow(currency);
 
   // Pick top loan by APR for Avalanche tracker
   const rankedLoansByAPR = useMemo(() => {

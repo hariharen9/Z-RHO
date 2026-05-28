@@ -8,10 +8,10 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import type { Loan, CreditCard, LoanPayment, CCBill } from '@/types/database.types';
 import type { DashboardSummary, UpcomingPayment, MonthlyOutflow, DebtHistoryPoint } from '@/types/common.types';
-import { getDueInfo, getNextEMIDate, calculateCurrentBalance } from '@/lib/calculations';
+import { getDueInfo, getNextEMIDate } from '@/lib/calculations';
 import { convertCurrency } from '@/lib/currency';
 import { getLastNMonths, formatMonthYear } from '@/lib/dates';
-import { format, startOfMonth, endOfMonth, addDays } from 'date-fns';
+import { format, startOfMonth, addDays } from 'date-fns';
 
 /**
  * Dashboard summary stats: total debt, obligations, credit limits.
@@ -34,11 +34,30 @@ export function useDashboardStats(defaultCurrency: string = 'INR') {
         .select('credit_limit, currency, id')
         .eq('status', 'active');
 
+      // Group active card info by ID
+      const cardMap = new Map<string, Pick<CreditCard, 'credit_limit' | 'currency' | 'id'>>();
+      for (const card of (cards as Pick<CreditCard, 'credit_limit' | 'currency' | 'id'>[]) ?? []) {
+        cardMap.set(card.id, card);
+      }
+
+      // Fetch active credit card transactions to compute current outstanding balance per card
+      const { data: cardTransactions } = await supabase
+        .from('cc_transactions')
+        .select('card_id, amount, transaction_type');
+
+      // Group card transactions by card ID
+      const txsByCard = new Map<string, { amount: number; transaction_type: string }[]>();
+      for (const tx of (cardTransactions ?? []) as { card_id: string; amount: number; transaction_type: string }[]) {
+        const list = txsByCard.get(tx.card_id) ?? [];
+        list.push(tx);
+        txsByCard.set(tx.card_id, list);
+      }
+
       // Fetch current month bills
       const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
       const { data: bills } = await supabase
         .from('cc_bills')
-        .select('statement_amount, status')
+        .select('card_id, statement_amount, status')
         .eq('billing_month', monthStart)
         .in('status', ['generated', 'upcoming', 'overdue', 'partially_paid']);
 
@@ -52,20 +71,40 @@ export function useDashboardStats(defaultCurrency: string = 'INR') {
       }
 
       let totalCreditLimit = 0;
+      let totalAvailableCredit = 0;
+
       for (const card of (cards as Pick<CreditCard, 'credit_limit' | 'currency' | 'id'>[]) ?? []) {
         totalCreditLimit += convertCurrency(card.credit_limit, card.currency, defaultCurrency);
+
+        const cardTxs = txsByCard.get(card.id) ?? [];
+        const cardOutstanding = cardTxs.reduce((sum, tx) => {
+          if (tx.transaction_type === 'debit') {
+            return sum + tx.amount;
+          } else {
+            return sum - tx.amount;
+          }
+        }, 0);
+
+        // Subtract active outstanding card balance from its limit to get available credit
+        const available = Math.max(0, card.credit_limit - Math.max(0, cardOutstanding));
+        totalAvailableCredit += convertCurrency(available, card.currency, defaultCurrency);
+
+        // Also add credit card outstanding to total debt
+        totalDebt += convertCurrency(Math.max(0, cardOutstanding), card.currency, defaultCurrency);
       }
 
       let monthlyBills = 0;
-      for (const bill of (bills as Pick<CCBill, 'statement_amount' | 'status'>[]) ?? []) {
-        monthlyBills += bill.statement_amount; // assumes same currency for simplicity
+      for (const bill of (bills as Pick<CCBill, 'card_id' | 'statement_amount' | 'status'>[]) ?? []) {
+        const card = cardMap.get(bill.card_id);
+        const cardCurrency = card?.currency ?? defaultCurrency;
+        monthlyBills += convertCurrency(bill.statement_amount, cardCurrency, defaultCurrency);
       }
 
       return {
         totalOutstandingDebt: Math.round(totalDebt * 100) / 100,
         thisMonthObligations: Math.round((monthlyEMIs + monthlyBills) * 100) / 100,
         totalCreditLimit: Math.round(totalCreditLimit * 100) / 100,
-        totalAvailableCredit: Math.round(totalCreditLimit * 100) / 100, // Will subtract balances when we have them
+        totalAvailableCredit: Math.round(totalAvailableCredit * 100) / 100,
         currency: defaultCurrency,
       };
     },
@@ -85,7 +124,6 @@ export function useUpcomingPayments() {
     queryFn: async (): Promise<UpcomingPayment[]> => {
       const today = new Date();
       const thirtyDaysLater = format(addDays(today, 30), 'yyyy-MM-dd');
-      const todayStr = format(today, 'yyyy-MM-dd');
       const payments: UpcomingPayment[] = [];
 
       // Active loans → next EMI dates
@@ -119,27 +157,28 @@ export function useUpcomingPayments() {
         .in('status', ['generated', 'upcoming', 'overdue', 'partially_paid'])
         .lte('due_date', thirtyDaysLater);
 
-      // Get card names for bills
+      // Get card names & currencies for bills
       const cardIds = [...new Set((bills ?? []).map((b: any) => b.card_id))];
-      let cardMap: Record<string, string> = {};
+      let cardInfoMap: Record<string, { name: string; currency: string }> = {};
       if (cardIds.length > 0) {
         const { data: cardNames } = await supabase
           .from('credit_cards')
           .select('id, name, currency')
           .in('id', cardIds);
         for (const c of (cardNames ?? []) as Pick<CreditCard, 'id' | 'name' | 'currency'>[]) {
-          cardMap[c.id] = c.name;
+          cardInfoMap[c.id] = { name: c.name, currency: c.currency };
         }
       }
 
       for (const bill of (bills as Pick<CCBill, 'id' | 'card_id' | 'statement_amount' | 'due_date' | 'status'>[]) ?? []) {
         const due = getDueInfo(bill.due_date);
+        const info = cardInfoMap[bill.card_id];
         payments.push({
           id: `bill-${bill.id}`,
-          name: cardMap[bill.card_id] ?? 'Card Bill',
+          name: info?.name ?? 'Card Bill',
           type: 'card',
           amount: bill.statement_amount,
-          currency: 'INR',
+          currency: info?.currency ?? 'INR',
           dueDate: bill.due_date,
           daysRemaining: due.daysRemaining,
           status: due.status,
@@ -158,48 +197,73 @@ export function useUpcomingPayments() {
 /**
  * Debt reduction history over the last 12 months (for line chart).
  */
-export function useDebtHistory() {
+export function useDebtHistory(defaultCurrency: string = 'INR') {
   const user = useAuthStore((s) => s.user);
 
   return useQuery({
-    queryKey: ['dashboard', 'debtHistory', user?.id],
+    queryKey: ['dashboard', 'debtHistory', user?.id, defaultCurrency],
     queryFn: async (): Promise<DebtHistoryPoint[]> => {
       const months = getLastNMonths(12);
       const points: DebtHistoryPoint[] = [];
 
-      // Get all loan payments to reconstruct outstanding over time
+      // Fetch all loans (active and closed)
+      const { data: loans } = await supabase
+        .from('loans')
+        .select('id, principal_amount, start_date, currency');
+
+      // Fetch all loan payments
       const { data: payments } = await supabase
         .from('loan_payments')
         .select('emi_month, outstanding_after, loan_id')
         .order('emi_month', { ascending: true });
 
-      // Get current loan outstandings
-      const { data: loans } = await supabase
-        .from('loans')
-        .select('id, current_outstanding, principal_amount')
-        .eq('status', 'active');
-
-      const loanMap = new Map<string, number>();
-      for (const loan of (loans ?? []) as Pick<Loan, 'id' | 'current_outstanding' | 'principal_amount'>[]) {
-        loanMap.set(loan.id, loan.current_outstanding);
+      const paymentsByLoan = new Map<string, Pick<LoanPayment, 'emi_month' | 'outstanding_after'>[]>();
+      for (const p of (payments ?? []) as Pick<LoanPayment, 'emi_month' | 'outstanding_after' | 'loan_id'>[]) {
+        const list = paymentsByLoan.get(p.loan_id) ?? [];
+        list.push({ emi_month: p.emi_month, outstanding_after: p.outstanding_after });
+        paymentsByLoan.set(p.loan_id, list);
       }
 
-      // Build outstanding at each month end from payments
-      const paymentsByMonth = new Map<string, number>();
-      for (const payment of (payments ?? []) as Pick<LoanPayment, 'emi_month' | 'outstanding_after' | 'loan_id'>[]) {
-        const monthKey = format(startOfMonth(new Date(payment.emi_month)), 'yyyy-MM-dd');
-        // Sum outstanding across all loans for this month
-        const existing = paymentsByMonth.get(monthKey) ?? 0;
-        paymentsByMonth.set(monthKey, existing + payment.outstanding_after);
-      }
+      for (const monthStr of months) {
+        let totalDebtForMonth = 0;
 
-      // Fallback: use current outstanding for months without data
-      const totalCurrent = Array.from(loanMap.values()).reduce((s, v) => s + v, 0);
+        for (const loan of (loans ?? []) as Pick<Loan, 'id' | 'principal_amount' | 'start_date' | 'currency'>[]) {
+          const loanStartMonthStr = format(startOfMonth(new Date(loan.start_date)), 'yyyy-MM-dd');
+          
+          if (loanStartMonthStr > monthStr) {
+            // Loan has not started yet in this month
+            continue;
+          }
 
-      for (const month of months) {
+          const loanPayments = paymentsByLoan.get(loan.id) ?? [];
+          // Find all payments on or before this month
+          const pastPayments = loanPayments.filter(
+            (p) => format(startOfMonth(new Date(p.emi_month)), 'yyyy-MM-dd') <= monthStr
+          );
+
+          let outstanding = loan.principal_amount;
+
+          if (pastPayments.length > 0) {
+            // Group by month to find the latest payment month
+            const byMonth = new Map<string, number>();
+            for (const p of pastPayments) {
+              const pMonthStr = format(startOfMonth(new Date(p.emi_month)), 'yyyy-MM-dd');
+              const currentMin = byMonth.get(pMonthStr) ?? Infinity;
+              byMonth.set(pMonthStr, Math.min(currentMin, p.outstanding_after));
+            }
+
+            // Find the latest payment month key
+            const sortedPaymentMonths = Array.from(byMonth.keys()).sort();
+            const latestMonthKey = sortedPaymentMonths[sortedPaymentMonths.length - 1];
+            outstanding = byMonth.get(latestMonthKey) ?? loan.principal_amount;
+          }
+
+          totalDebtForMonth += convertCurrency(outstanding, loan.currency, defaultCurrency);
+        }
+
         points.push({
-          month: formatMonthYear(month),
-          totalDebt: paymentsByMonth.get(month) ?? totalCurrent,
+          month: formatMonthYear(monthStr),
+          totalDebt: Math.round(totalDebtForMonth * 100) / 100,
         });
       }
 
@@ -213,36 +277,62 @@ export function useDebtHistory() {
 /**
  * Monthly outflow for the last 6 months (for bar chart).
  */
-export function useMonthlyOutflow() {
+export function useMonthlyOutflow(defaultCurrency: string = 'INR') {
   const user = useAuthStore((s) => s.user);
 
   return useQuery({
-    queryKey: ['dashboard', 'outflow', user?.id],
+    queryKey: ['dashboard', 'outflow', user?.id, defaultCurrency],
     queryFn: async (): Promise<MonthlyOutflow[]> => {
       const months = getLastNMonths(6);
       const outflows: MonthlyOutflow[] = [];
 
-      // Get loan payments by month
+      // Fetch all loans to map currency
+      const { data: loans } = await supabase
+        .from('loans')
+        .select('id, currency');
+      const loanCurrencyMap = new Map<string, string>();
+      for (const l of loans ?? []) {
+        loanCurrencyMap.set(l.id, l.currency);
+      }
+
+      // Fetch all cards to map currency
+      const { data: cards } = await supabase
+        .from('credit_cards')
+        .select('id, currency');
+      const cardCurrencyMap = new Map<string, string>();
+      for (const c of cards ?? []) {
+        cardCurrencyMap.set(c.id, c.currency);
+      }
+
+      // Get loan payments with loan_id by month
       const { data: loanPayments } = await supabase
         .from('loan_payments')
-        .select('emi_month, amount_paid')
+        .select('emi_month, amount_paid, loan_id')
         .gte('emi_month', months[0]);
 
-      // Get CC bill payments by month
+      // Get CC bill payments with card_id by month
       const { data: billPayments } = await supabase
         .from('cc_bills')
-        .select('billing_month, paid_amount')
+        .select('billing_month, paid_amount, card_id')
         .not('paid_amount', 'is', null)
         .gte('billing_month', months[0]);
 
       for (const month of months) {
-        const emiTotal = ((loanPayments ?? []) as Pick<LoanPayment, 'emi_month' | 'amount_paid'>[])
-          .filter((p) => format(startOfMonth(new Date(p.emi_month)), 'yyyy-MM-dd') === month)
-          .reduce((sum, p) => sum + p.amount_paid, 0);
+        let emiTotal = 0;
+        for (const p of (loanPayments ?? []) as Pick<LoanPayment, 'emi_month' | 'amount_paid' | 'loan_id'>[]) {
+          if (format(startOfMonth(new Date(p.emi_month)), 'yyyy-MM-dd') === month) {
+            const loanCurrency = loanCurrencyMap.get(p.loan_id) ?? defaultCurrency;
+            emiTotal += convertCurrency(p.amount_paid, loanCurrency, defaultCurrency);
+          }
+        }
 
-        const ccTotal = ((billPayments ?? []) as Pick<CCBill, 'billing_month' | 'paid_amount'>[])
-          .filter((b) => b.billing_month === month)
-          .reduce((sum, b) => sum + (b.paid_amount ?? 0), 0);
+        let ccTotal = 0;
+        for (const b of (billPayments ?? []) as Pick<CCBill, 'billing_month' | 'paid_amount' | 'card_id'>[]) {
+          if (b.billing_month === month) {
+            const cardCurrency = cardCurrencyMap.get(b.card_id) ?? defaultCurrency;
+            ccTotal += convertCurrency(b.paid_amount ?? 0, cardCurrency, defaultCurrency);
+          }
+        }
 
         outflows.push({
           month: formatMonthYear(month),

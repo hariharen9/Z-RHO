@@ -44,4 +44,39 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (
+              id.includes('recharts') ||
+              id.includes('d3') ||
+              id.includes('react-resize-detector') ||
+              id.includes('internmap')
+            ) {
+              return 'vendor-charts';
+            }
+            if (id.includes('framer-motion')) {
+              return 'vendor-motion';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
+            if (
+              id.includes('react') ||
+              id.includes('react-dom') ||
+              id.includes('react-router') ||
+              id.includes('@tanstack') ||
+              id.includes('zustand')
+            ) {
+              return 'vendor-core';
+            }
+            return 'vendor-utils';
+          }
+        },
+      },
+    },
+  },
 });

@@ -158,13 +158,24 @@ export function useMarkBillPaid() {
       paid_date: string;
       statement_amount: number;
     }) => {
+      // 1. Fetch current bill state to retrieve existing accumulated paid_amount
+      const { data: currentBill, error: fetchError } = await supabase
+        .from('cc_bills')
+        .select('paid_amount')
+        .eq('id', input.bill_id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const existingPaid = currentBill?.paid_amount ?? 0;
+      const newPaidTotal = existingPaid + input.paid_amount;
       const status: BillStatus =
-        input.paid_amount >= input.statement_amount ? 'paid' : 'partially_paid';
+        newPaidTotal >= input.statement_amount ? 'paid' : 'partially_paid';
 
       const { data, error } = await supabase
         .from('cc_bills')
         .update({
-          paid_amount: input.paid_amount,
+          paid_amount: newPaidTotal,
           paid_date: input.paid_date,
           status,
         })
@@ -193,6 +204,7 @@ export function useUpdateBill() {
     mutationFn: async (input: {
       bill_id: string;
       card_id: string;
+      opening_balance?: number;
       total_spends: number;
       total_credits: number;
       statement_amount: number;
@@ -202,6 +214,7 @@ export function useUpdateBill() {
       const { data, error } = await supabase
         .from('cc_bills')
         .update({
+          ...(input.opening_balance !== undefined ? { opening_balance: input.opening_balance } : {}),
           total_spends: input.total_spends,
           total_credits: input.total_credits,
           statement_amount: input.statement_amount,

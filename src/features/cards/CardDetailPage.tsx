@@ -193,11 +193,25 @@ export function CardDetailPage() {
           }
         }
 
-        for (const [billingMonth, data] of groups.entries()) {
+        const getPreviousBillingMonth = (monthStr: string) => {
+          const date = new Date(monthStr);
+          date.setMonth(date.getMonth() - 1);
+          return format(date, 'yyyy-MM-01');
+        };
+
+        const sortedMonths = Array.from(groups.keys()).sort();
+
+        for (const billingMonth of sortedMonths) {
           if (cancelled) break;
-          const existingBill = currentBills.find((b) => b.billing_month === billingMonth);
-          const statementAmount = Math.max(0, data.spends - data.credits);
+          const data = groups.get(billingMonth)!;
+
+          const prevMonthStr = getPreviousBillingMonth(billingMonth);
+          const prevBill = currentBills.find((b) => b.billing_month === prevMonthStr);
+          const openingBalance = prevBill ? Math.max(0, prevBill.statement_amount - (prevBill.paid_amount ?? 0)) : 0;
+
+          const statementAmount = Math.max(0, openingBalance + data.spends - data.credits);
           const minimumDue = Math.round(statementAmount * 0.05 * 100) / 100;
+          const existingBill = currentBills.find((b) => b.billing_month === billingMonth);
 
           if (!existingBill) {
             await createBill.mutateAsync({
@@ -205,7 +219,7 @@ export function CardDetailPage() {
               billing_month: billingMonth,
               statement_day: card.statement_day,
               due_day: card.due_day,
-              opening_balance: 0,
+              opening_balance: openingBalance,
               total_spends: data.spends,
               total_credits: data.credits,
               statement_amount: statementAmount,
@@ -226,6 +240,7 @@ export function CardDetailPage() {
             const roundedStatement = Math.round(statementAmount * 100) / 100;
 
             const amountsChanged =
+              Math.abs(existingBill.opening_balance - openingBalance) > 0.01 ||
               Math.abs(existingBill.total_spends - roundedSpends) > 0.01 ||
               Math.abs(existingBill.total_credits - roundedCredits) > 0.01 ||
               Math.abs(existingBill.statement_amount - roundedStatement) > 0.01;
@@ -235,6 +250,7 @@ export function CardDetailPage() {
               await updateBill.mutateAsync({
                 bill_id: existingBill.id,
                 card_id: card.id,
+                opening_balance: openingBalance,
                 total_spends: roundedSpends,
                 total_credits: roundedCredits,
                 statement_amount: roundedStatement,
