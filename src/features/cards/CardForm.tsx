@@ -55,8 +55,8 @@ const cardSchema = z.object({
   card_network: z.enum(['visa', 'mastercard', 'amex', 'rupay', 'other']),
   currency: z.string(),
   credit_limit: z.coerce.number().positive('Credit limit must be positive'),
-  statement_day: z.coerce.number().int().min(1).max(28, 'Must be 1-28'),
-  due_day: z.coerce.number().int().min(1).max(28, 'Must be 1-28'),
+  statement_day: z.coerce.number().int().min(1).max(31, 'Must be 1-31'),
+  due_day: z.coerce.number().int().min(1).max(31, 'Must be 1-31'),
   color: z.string(),
   notes: z.string().optional(),
 });
@@ -273,26 +273,26 @@ export function CardForm() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
-                    Statement Day (1-28)
+                    Statement Day (1-31)
                   </label>
                   <input
                     {...register('statement_day')}
                     type="number"
                     min="1"
-                    max="28"
+                    max="31"
                     className="w-full px-3 py-2.5 bg-surface border border-border rounded-xl text-foreground focus:border-foreground/30 outline-none text-xs"
                   />
                   {errors.statement_day && <p className="text-red-400 text-xs mt-1 font-medium">{errors.statement_day.message}</p>}
                 </div>
                 <div>
                   <label className="block text-[9px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
-                    Due Day (1-28)
+                    Due Day (1-31)
                   </label>
                   <input
                     {...register('due_day')}
                     type="number"
                     min="1"
-                    max="28"
+                    max="31"
                     className="w-full px-3 py-2.5 bg-surface border border-border rounded-xl text-foreground focus:border-foreground/30 outline-none text-xs"
                   />
                   {errors.due_day && <p className="text-red-400 text-xs mt-1 font-medium">{errors.due_day.message}</p>}

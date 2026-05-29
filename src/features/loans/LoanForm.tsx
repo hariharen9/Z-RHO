@@ -120,7 +120,7 @@ const loanSchema = z.object({
   interest_rate: z.coerce.number().min(0).max(100, 'Rate must be 0-100'),
   tenure_months: z.coerce.number().int().positive('Tenure must be positive'),
   emi_amount: z.coerce.number().optional(),
-  emi_day: z.coerce.number().int().min(1).max(28, 'EMI day must be 1-28'),
+  emi_day: z.coerce.number().int().min(1).max(31, 'EMI day must be 1-31'),
   start_date: z.string().min(1, 'Start date is required'),
   notes: z.string().optional(),
 });
@@ -434,13 +434,13 @@ export function LoanForm() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
-                  EMI Payment Day (1-28)
+                  EMI Payment Day (1-31)
                 </label>
                 <input
                   {...register('emi_day')}
                   type="number"
                   min="1"
-                  max="28"
+                  max="31"
                   className={inputClass}
                 />
                 {errors.emi_day && <p className="text-red-400 text-xs mt-1 font-medium">{errors.emi_day.message}</p>}
