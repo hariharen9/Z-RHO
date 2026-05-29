@@ -466,68 +466,88 @@ export function CardDetailPage() {
             </div>
           </div>
 
-          <div className="relative flex items-end justify-between text-white mt-8" style={{ transform: 'translateZ(20px)' }}>
-            <div className="flex items-center gap-4">
-              {/* Metal smart chip */}
-              <div className="relative w-9 h-7 rounded-md bg-gradient-to-tr from-amber-400 via-amber-200 to-amber-300 border border-amber-400/30 shadow-[inset_0_1px_2px_rgba(255,255,255,0.4)] flex flex-wrap justify-between p-1 opacity-95 shrink-0 overflow-hidden">
-                <div className="absolute inset-0 grid grid-cols-3 grid-rows-2 gap-[1px] opacity-30 p-[1.5px] pointer-events-none">
-                  <div className="border-r border-b border-black/80 rounded-[1px]" />
-                  <div className="border-r border-b border-black/80" />
-                  <div className="border-b border-black/80 rounded-[1px]" />
-                  <div className="border-r border-black/80 rounded-[1px]" />
-                  <div className="border-r border-black/80" />
-                  <div className="border-black/80 rounded-[1px]" />
-                </div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-1.5 rounded-[2px] bg-amber-400/90 border border-amber-500/20 shadow-sm" />
+          {/* Middle Row: Metal smart chip + formatted monospace card number */}
+          <div className="relative flex items-center gap-4 text-white z-10 mt-6" style={{ transform: 'translateZ(22px)' }}>
+            <div className="relative w-9 h-7 rounded-md bg-gradient-to-tr from-amber-400 via-amber-200 to-amber-300 border border-amber-400/30 shadow-[inset_0_1px_2px_rgba(255,255,255,0.4)] flex flex-wrap justify-between p-1 opacity-95 shrink-0 overflow-hidden">
+              <div className="absolute inset-0 grid grid-cols-3 grid-rows-2 gap-[1px] opacity-30 p-[1.5px] pointer-events-none">
+                <div className="border-r border-b border-black/80 rounded-[1px]" />
+                <div className="border-r border-b border-black/80" />
+                <div className="border-b border-black/80 rounded-[1px]" />
+                <div className="border-r border-black/80 rounded-[1px]" />
+                <div className="border-r border-black/80" />
+                <div className="border-black/80 rounded-[1px]" />
               </div>
-              <div>
-                <div className="text-[9px] uppercase tracking-widest text-white/50 font-semibold">Current Outstanding</div>
-                <div className="text-3xl font-bold tabular">
-                  {formatCurrency(Math.max(0, currentBalance), card.currency)}
-                </div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-1.5 rounded-[2px] bg-amber-400/90 border border-amber-500/20 shadow-sm" />
+            </div>
+            
+            <div className="text-xl tracking-[0.25em] font-mono select-none text-white/95 leading-none">
+              •••• •••• •••• {card.last_four}
+            </div>
+          </div>
+
+          {/* Bottom Row: packed with rich visual hierarchy */}
+          <div className="relative flex items-end justify-between text-white mt-7 z-10" style={{ transform: 'translateZ(20px)' }}>
+            <div className="space-y-0.5">
+              <div className="text-[8px] uppercase tracking-widest text-white/50 font-bold">Current Outstanding</div>
+              <div className="text-2xl font-bold tabular mt-0.5 leading-none">
+                {formatCurrency(Math.max(0, currentBalance), card.currency)}
+              </div>
+              <div className="text-[9px] text-white/40 font-medium pt-1">
+                Limit: {formatCurrency(card.credit_limit, card.currency)}
               </div>
             </div>
 
-            {/* Billing Cycle Rings Indicator */}
-            {billingDates && (
-              <div className="relative flex h-14 w-14 items-center justify-center shrink-0" style={{ transform: 'translateZ(20px)' }}>
-                <svg width="56" height="56" className="-rotate-90">
-                  <circle cx="28" cy="28" r="24" stroke="rgba(255,255,255,0.06)" strokeWidth="4" fill="none" />
-                  <motion.circle
-                    cx="28"
-                    cy="28"
-                    r="24"
-                    stroke={
-                      (!activeBill || activeBill.status === 'paid')
-                        ? 'var(--color-success)'
-                        : billingDates.daysToDue <= 5
-                        ? 'var(--color-destructive)'
-                        : 'rgba(255,255,255,0.7)'
-                    }
-                    strokeWidth="4"
-                    fill="none"
-                    strokeDasharray={2 * Math.PI * 24}
-                    initial={{ strokeDashoffset: 2 * Math.PI * 24 }}
-                    animate={{ strokeDashoffset: 2 * Math.PI * 24 * (1 - ((!activeBill || activeBill.status === 'paid') ? 1 : cycleProgress)) }}
-                    transition={{ type: 'spring', stiffness: 60, damping: 18 }}
-                    strokeLinecap="round"
-                    className={(!activeBill || activeBill.status === 'paid') ? '' : billingDates.daysToDue <= 5 ? 'animate-[pulse_1.5s_infinite]' : ''}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                  {(!activeBill || activeBill.status === 'paid') ? (
-                    <Check size={18} className="text-white bg-white/20 p-0.5 rounded-full stroke-[3px]" />
-                  ) : (
-                    <>
-                      <span className={`text-xs font-bold leading-none ${billingDates.daysToDue <= 5 ? 'text-destructive-foreground animate-pulse' : ''}`}>
-                        {billingDates.daysToDue}d
-                      </span>
-                      <span className="text-[6px] uppercase tracking-widest text-white/50">due</span>
-                    </>
-                  )}
+            {/* Middle Section: sleek glass cycle badge */}
+            <div className="text-center px-2.5 py-1 rounded-xl bg-white/[0.06] backdrop-blur-sm border border-white/[0.08] text-[9px] font-semibold tracking-wider text-white/80 self-end mb-1">
+              Cycle: {card.statement_day}th / {card.due_day}th
+            </div>
+
+            {/* Right Section: Available limit + compact circular cycle status */}
+            <div className="flex items-center gap-3.5">
+              <div className="text-right">
+                <div className="text-[8px] uppercase tracking-widest text-white/50 font-bold">Available Credit</div>
+                <div className="text-sm font-bold text-white/90 mt-0.5 leading-none">
+                  {formatCurrency(availableLimit, card.currency)}
                 </div>
               </div>
-            )}
+
+              {/* Compact Billing Cycle Rings Indicator */}
+              {billingDates && (
+                <div className="relative flex h-10 w-10 items-center justify-center shrink-0">
+                  <svg width="40" height="40" className="-rotate-90">
+                    <circle cx="20" cy="20" r="17" stroke="rgba(255,255,255,0.06)" strokeWidth="3" fill="none" />
+                    <motion.circle
+                      cx="20"
+                      cy="20"
+                      r="17"
+                      stroke={
+                        (!activeBill || activeBill.status === 'paid')
+                          ? 'var(--color-success)'
+                          : billingDates.daysToDue <= 5
+                          ? 'var(--color-destructive)'
+                          : 'rgba(255,255,255,0.7)'
+                      }
+                      strokeWidth="3"
+                      fill="none"
+                      strokeDasharray={2 * Math.PI * 17}
+                      initial={{ strokeDashoffset: 2 * Math.PI * 17 }}
+                      animate={{ strokeDashoffset: 2 * Math.PI * 17 * (1 - ((!activeBill || activeBill.status === 'paid') ? 1 : cycleProgress)) }}
+                      transition={{ type: 'spring', stiffness: 60, damping: 18 }}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    {(!activeBill || activeBill.status === 'paid') ? (
+                      <Check size={12} className="text-white bg-white/20 p-0.5 rounded-full stroke-[3px]" />
+                    ) : (
+                      <span className={`text-[9px] font-bold leading-none ${billingDates.daysToDue <= 5 ? 'text-destructive-foreground animate-pulse font-extrabold' : ''}`}>
+                        {billingDates.daysToDue}d
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -221,7 +221,7 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
         to={`/cards/${card.id}`}
         className="group relative block overflow-hidden rounded-2xl text-left w-full z-10"
         style={{
-          background: `linear-gradient(165deg, #1e1e24 0%, #141418 50%, #0d0d10 100%)`,
+          background: `linear-gradient(135deg, ${card.color} 0%, color-mix(in oklab, ${card.color} 65%, black) 100%)`,
           transform: `perspective(1000px) rotateX(${rotate.x}deg) rotateY(${rotate.y}deg) scale3d(${rotate.x !== 0 ? '1.02' : '1'}, ${rotate.y !== 0 ? '1.02' : '1'}, 1)`,
           transition: rotate.x === 0 ? 'transform 0.5s ease, box-shadow 0.5s ease' : 'transform 0.1s ease-out, box-shadow 0.1s ease-out',
           transformStyle: 'preserve-3d',

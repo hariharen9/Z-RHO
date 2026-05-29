@@ -139,7 +139,7 @@ export function AppLayout() {
 
       {/* Main Content Area */}
       <div className="flex flex-col h-[100dvh] overflow-y-auto pb-28 lg:pb-0 relative">
-        
+
         {/* Desktop Top Header Bar */}
         <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/70 px-8 py-4 backdrop-blur-xl max-lg:hidden">
           {/* Breadcrumbs & Live Ticking Clock */}
@@ -164,7 +164,7 @@ export function AppLayout() {
               onClick={() => setNewTxOpen(true)}
               className="flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition hover:opacity-90 active:scale-95"
             >
-              <Plus size={12} /> New entry
+              <Plus size={12} /> New Transaction
             </button>
 
             {/* User Profile Avatar with custom gradient */}
