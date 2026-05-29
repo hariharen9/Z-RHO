@@ -21,8 +21,11 @@ import {
   Briefcase,
   User,
   Coins,
+  CreditCard,
+  Info
 } from 'lucide-react';
 import { useCreateLoan, useLoan, useUpdateLoan } from '@/hooks/useLoans';
+import { useCards } from '@/hooks/useCards';
 
 const categoryConfig: Record<
   string,
@@ -123,6 +126,9 @@ const loanSchema = z.object({
   emi_day: z.coerce.number().int().min(1).max(31, 'EMI day must be 1-31'),
   start_date: z.string().min(1, 'Start date is required'),
   notes: z.string().optional(),
+  linked_card_id: z.string().nullable().optional(),
+  is_third_party: z.boolean().default(false),
+  third_party_name: z.string().nullable().optional(),
 });
 
 type LoanFormData = z.infer<typeof loanSchema>;
@@ -135,6 +141,7 @@ export function LoanForm() {
   const [tenureUnit, setTenureUnit] = useState<'months' | 'years'>('months');
 
   const { data: existingLoan } = useLoan(id);
+  const { data: cards } = useCards();
   const createLoan = useCreateLoan();
   const updateLoan = useUpdateLoan();
 
@@ -151,6 +158,9 @@ export function LoanForm() {
       loan_type: 'personal',
       currency: 'INR',
       emi_day: 5,
+      linked_card_id: null,
+      is_third_party: false,
+      third_party_name: null,
     },
   });
 
@@ -168,6 +178,9 @@ export function LoanForm() {
       setValue('emi_day', existingLoan.emi_day);
       setValue('start_date', existingLoan.start_date);
       setValue('notes', existingLoan.notes ?? '');
+      setValue('linked_card_id', existingLoan.linked_card_id ?? null);
+      setValue('is_third_party', existingLoan.is_third_party ?? false);
+      setValue('third_party_name', existingLoan.third_party_name ?? null);
 
       if (existingLoan.tenure_months % 12 === 0) {
         setTenureUnit('years');
@@ -186,6 +199,18 @@ export function LoanForm() {
   const watchName = watch('name') || 'LOAN PROFILE';
   const watchLender = watch('lender') || 'LENDER';
   const loanType = watch('loan_type') || 'personal';
+  const linkedCardId = watch('linked_card_id');
+
+  const cardOptions: DropdownOption[] = useMemo(() => {
+    if (!cards) return [{ value: '', label: 'None' }];
+    return [
+      { value: '', label: 'None (Standalone Loan)' },
+      ...cards.map((c) => ({
+        value: c.id,
+        label: `${c.name} (${c.bank} •••• ${c.last_four})`,
+      })),
+    ];
+  }, [cards]);
 
   const calculatedEMI = useMemo(() => {
     return principal > 0 && rate >= 0 && tenure > 0
@@ -221,6 +246,8 @@ export function LoanForm() {
 
   const principalRatio = totalPayable > 0 ? principal / totalPayable : 1;
   const interestRatio = 1 - principalRatio;
+
+  const isThirdParty = watch('is_third_party');
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
@@ -299,6 +326,77 @@ export function LoanForm() {
                   />
                 )}
               />
+            </div>
+
+            {/* Linked Credit Card (Optional) */}
+            <div className="bg-surface-elevated/30 p-4 rounded-2xl border border-border/50">
+              <Controller
+                control={control}
+                name="linked_card_id"
+                render={({ field }) => (
+                  <Dropdown
+                    label="Linked Credit Card (Optional - For CC EMIs)"
+                    options={cardOptions}
+                    value={field.value || ''}
+                    onChange={(val) => field.onChange(val || null)}
+                  />
+                )}
+              />
+              <AnimatePresence>
+                {linkedCardId && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                    animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex items-start gap-2 text-[11px] text-muted-foreground bg-primary/5 p-3 rounded-xl border border-primary/10">
+                      <Info size={14} className="text-primary shrink-0 mt-0.5" />
+                      <p>
+                        This loan's outstanding principal will be <strong className="text-foreground">deducted from this card's available limit</strong>. EMI payments will be posted to the card's ledger.
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Friend's Loan / Third Party */}
+            <div className="bg-surface/50 p-4 rounded-2xl border border-border/50">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  {...register('is_third_party')}
+                  className="w-4 h-4 rounded text-primary focus:ring-primary/50 border-border bg-background transition-colors"
+                />
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-foreground group-hover:text-primary transition-colors">This is a Friend's Loan (Third-Party)</span>
+                  <span className="text-[10px] text-muted-foreground mt-0.5">Exclude from your personal net-worth tracking, but keep CC limit blocked.</span>
+                </div>
+              </label>
+
+              <AnimatePresence>
+                {isThirdParty && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                    animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
+                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
+                        Friend's Name
+                      </label>
+                      <input
+                        {...register('third_party_name')}
+                        type="text"
+                        className={inputClass}
+                        placeholder="e.g. Alex"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Principal + Interest Rate + Tenure */}

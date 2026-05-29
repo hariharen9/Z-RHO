@@ -25,7 +25,7 @@ export function useDashboardStats(defaultCurrency: string = 'INR') {
       // Fetch active loans
       const { data: loans } = await supabase
         .from('loans')
-        .select('current_outstanding, emi_amount, currency')
+        .select('current_outstanding, emi_amount, currency, is_third_party')
         .eq('status', 'active');
 
       // Fetch active cards
@@ -66,6 +66,7 @@ export function useDashboardStats(defaultCurrency: string = 'INR') {
       let monthlyEMIs = 0;
 
       for (const loan of (loans as Loan[]) ?? []) {
+        if (loan.is_third_party) continue;
         totalDebt += convertCurrency(loan.current_outstanding, loan.currency, defaultCurrency);
         monthlyEMIs += convertCurrency(loan.emi_amount, loan.currency, defaultCurrency);
       }
@@ -209,7 +210,7 @@ export function useDebtHistory(defaultCurrency: string = 'INR') {
       // Fetch all loans (active and closed)
       const { data: loans } = await supabase
         .from('loans')
-        .select('id, principal_amount, start_date, currency');
+        .select('id, principal_amount, start_date, currency, is_third_party');
 
       // Fetch all loan payments
       const { data: payments } = await supabase
@@ -227,7 +228,9 @@ export function useDebtHistory(defaultCurrency: string = 'INR') {
       for (const monthStr of months) {
         let totalDebtForMonth = 0;
 
-        for (const loan of (loans ?? []) as Pick<Loan, 'id' | 'principal_amount' | 'start_date' | 'currency'>[]) {
+        for (const loan of (loans as Loan[]) ?? []) {
+          if (loan.is_third_party) continue;
+
           const loanStartMonthStr = format(startOfMonth(new Date(loan.start_date)), 'yyyy-MM-dd');
           
           if (loanStartMonthStr > monthStr) {
@@ -286,13 +289,15 @@ export function useMonthlyOutflow(defaultCurrency: string = 'INR') {
       const months = getLastNMonths(6);
       const outflows: MonthlyOutflow[] = [];
 
-      // Fetch all loans to map currency
+      // Fetch all loans to map currency and third-party status
       const { data: loans } = await supabase
         .from('loans')
-        .select('id, currency');
+        .select('id, currency, is_third_party');
       const loanCurrencyMap = new Map<string, string>();
+      const thirdPartyLoanIds = new Set<string>();
       for (const l of loans ?? []) {
         loanCurrencyMap.set(l.id, l.currency);
+        if (l.is_third_party) thirdPartyLoanIds.add(l.id);
       }
 
       // Fetch all cards to map currency
@@ -320,6 +325,7 @@ export function useMonthlyOutflow(defaultCurrency: string = 'INR') {
       for (const month of months) {
         let emiTotal = 0;
         for (const p of (loanPayments ?? []) as Pick<LoanPayment, 'emi_month' | 'amount_paid' | 'loan_id'>[]) {
+          if (thirdPartyLoanIds.has(p.loan_id)) continue;
           if (format(startOfMonth(new Date(p.emi_month)), 'yyyy-MM-dd') === month) {
             const loanCurrency = loanCurrencyMap.get(p.loan_id) ?? defaultCurrency;
             emiTotal += convertCurrency(p.amount_paid, loanCurrency, defaultCurrency);

@@ -30,6 +30,7 @@ import {
   Briefcase,
   ChevronRight,
   Check,
+  ShieldCheck,
 } from 'lucide-react';
 
 const MERCHANT_BRANDING: Record<string, { icon: any; color: string; bg: string }> = {
@@ -57,6 +58,7 @@ const getMerchantBranding = (merchantName: string = '') => {
 
 // Hooks & Calculations
 import { useCard, useDeleteCard, useUpdateCard } from '@/hooks/useCards';
+import { useLoans } from '@/hooks/useLoans';
 import { useAllCardTransactions, useCreateTransaction, useDeleteTransaction, useUpdateTransaction } from '@/hooks/useTransactions';
 import { useBills, useMarkBillPaid, useCreateBill, useUpdateBill } from '@/hooks/useBills';
 import { calculateCCUtilization, calculateCurrentBalance, calculateBillDates, getDueInfo, determineBillingMonth, calculateDaysRemaining } from '@/lib/calculations';
@@ -93,6 +95,7 @@ export function CardDetailPage() {
   const { data: card, isLoading: cardLoading } = useCard(id);
   const { data: transactions = [] } = useAllCardTransactions(id);
   const { data: bills = [], isLoading: billsLoading } = useBills(id);
+  const { data: loans = [] } = useLoans();
 
   // Mutations
   const deleteCard = useDeleteCard();
@@ -152,15 +155,40 @@ export function CardDetailPage() {
 
   // Calculate Balances & Ratios
   const currentBalance = useMemo(() => calculateCurrentBalance(transactions), [transactions]);
+  
+  const myLinkedLoansBalance = useMemo(() => {
+    if (!card) return 0;
+    return loans
+      .filter((l) => l.linked_card_id === card.id && l.status === 'active' && !l.is_third_party)
+      .reduce((sum, l) => sum + l.current_outstanding, 0);
+  }, [loans, card]);
+
+  const friendLinkedLoansBalance = useMemo(() => {
+    if (!card) return 0;
+    return loans
+      .filter((l) => l.linked_card_id === card.id && l.status === 'active' && l.is_third_party)
+      .reduce((sum, l) => sum + l.current_outstanding, 0);
+  }, [loans, card]);
+
+  const linkedLoansBalance = myLinkedLoansBalance + friendLinkedLoansBalance;
+
+  const availableBankLimit = useMemo(() => {
+    if (!card) return 0;
+    return Math.max(0, card.credit_limit - Math.max(0, currentBalance) - linkedLoansBalance);
+  }, [card, currentBalance, linkedLoansBalance]);
+
+  const personalAvailableLimit = useMemo(() => {
+    if (!card || !card.personal_limit) return null;
+    return Math.max(0, card.personal_limit - Math.max(0, currentBalance) - myLinkedLoansBalance);
+  }, [card, currentBalance, myLinkedLoansBalance]);
+
   const utilizationRate = useMemo(() => {
     if (!card) return 0;
-    return calculateCCUtilization(Math.max(0, currentBalance), card.credit_limit) / 100;
-  }, [card, currentBalance]);
-
-  const availableLimit = useMemo(() => {
-    if (!card) return 0;
-    return Math.max(0, card.credit_limit - Math.max(0, currentBalance));
-  }, [card, currentBalance]);
+    if (card.personal_limit) {
+      return calculateCCUtilization(Math.max(0, currentBalance + myLinkedLoansBalance), card.personal_limit) / 100;
+    }
+    return calculateCCUtilization(Math.max(0, currentBalance + linkedLoansBalance), card.credit_limit) / 100;
+  }, [card, currentBalance, linkedLoansBalance, myLinkedLoansBalance]);
 
   // Automated Background statement synchronizer
   // Uses billsRef (not bills state) so bill mutations don't re-trigger this effect
@@ -507,7 +535,7 @@ export function CardDetailPage() {
               <div className="text-right">
                 <div className="text-[8px] uppercase tracking-widest text-white/50 font-bold">Available Credit</div>
                 <div className="text-sm font-bold text-white/90 mt-0.5 leading-none">
-                  {formatCurrency(availableLimit, card.currency)}
+                  {formatCurrency(card.personal_limit ? (personalAvailableLimit ?? 0) : availableBankLimit, card.currency)}
                 </div>
               </div>
 
@@ -553,15 +581,22 @@ export function CardDetailPage() {
       </div>
 
       {/* Numerical Financial Summary Boxes */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid ${myLinkedLoansBalance > 0 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'} gap-2`}>
         <MiniCard
           label="Current Balance"
           value={formatCurrency(Math.max(0, currentBalance), card.currency)}
           accent={currentBalance > 0}
         />
+        {myLinkedLoansBalance > 0 && (
+          <MiniCard
+            label="Active EMIs"
+            value={formatCurrency(myLinkedLoansBalance, card.currency)}
+            accent={true}
+          />
+        )}
         <MiniCard
-          label="Available Limit"
-          value={formatCurrency(availableLimit, card.currency)}
+          label={card.personal_limit ? "Personal Limit Available" : "Available Bank Limit"}
+          value={formatCurrency(card.personal_limit ? (personalAvailableLimit ?? 0) : availableBankLimit, card.currency)}
         />
         <MiniCard
           label="Repay Utilization"
@@ -569,6 +604,13 @@ export function CardDetailPage() {
           accent={utilizationRate > 0.3}
         />
       </div>
+
+      {card.personal_limit && (
+        <div className="flex items-center gap-2 mt-2 px-1 text-[10px] text-muted-foreground">
+          <ShieldCheck size={12} className="text-primary" /> 
+          <span>True Bank Limit Available: <strong className="text-foreground">{formatCurrency(availableBankLimit, card.currency)}</strong> (Includes Friend EMIs block)</span>
+        </div>
+      )}
 
       {/* Main Action Triggers */}
       <div className="grid grid-cols-2 md:flex gap-2">

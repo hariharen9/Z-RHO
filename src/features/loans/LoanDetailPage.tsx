@@ -23,6 +23,7 @@ import {
   GraduationCap,
   Briefcase,
   User,
+  Users,
   Coins,
 } from 'lucide-react';
 
@@ -82,6 +83,8 @@ const categoryConfig: Record<
 
 // Hooks & Calculations
 import { useLoan, useUpdateLoan, useDeleteLoan } from '@/hooks/useLoans';
+import { useCards } from '@/hooks/useCards';
+import { useCreateTransaction } from '@/hooks/useTransactions';
 import { useLoanPayments, useRecordPayment, useRecordPrepayment, useDeletePayment } from '@/hooks/useLoanPayments';
 import {
   calculateLoanStats,
@@ -108,6 +111,7 @@ export function LoanDetailPage() {
   // Queries
   const { data: loan, isLoading: loanLoading } = useLoan(id);
   const { data: payments = [], isLoading: paymentsLoading } = useLoanPayments(id);
+  const { data: cards, isLoading: cardsLoading } = useCards();
 
   // Mutations
   const deleteLoan = useDeleteLoan();
@@ -115,6 +119,7 @@ export function LoanDetailPage() {
   const recordRegularPayment = useRecordPayment();
   const recordPrepayment = useRecordPrepayment();
   const deletePayment = useDeletePayment();
+  const createTransaction = useCreateTransaction();
 
   // States
   const [activeTab, setActiveTab] = useState<LoanTab>('summary');
@@ -141,6 +146,11 @@ export function LoanDetailPage() {
     if (!loan) return null;
     return calculateLoanStats(loan, payments);
   }, [loan, payments]);
+
+  const linkedCard = useMemo(() => {
+    if (!loan?.linked_card_id || !cards) return null;
+    return cards.find((c) => c.id === loan.linked_card_id) || null;
+  }, [loan?.linked_card_id, cards]);
 
   // Extract next unpaid EMI month details
   const nextEMI = useMemo(() => {
@@ -232,8 +242,25 @@ export function LoanDetailPage() {
           <ArrowLeft size={16} />
         </button>
         <div className="flex-1">
-          <h1 className="text-xl font-bold tracking-tight text-foreground">{loan.name}</h1>
-          <p className="text-xs text-muted-foreground">{loan.lender} · Interest rate: {loan.interest_rate}% p.a.</p>
+          <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            {loan.name}
+            {linkedCard && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                <Zap size={10} /> CC EMI
+              </span>
+            )}
+            {loan.is_third_party && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-bold bg-secondary/10 text-secondary border border-secondary/20 flex items-center gap-1">
+                <Users size={10} /> Friend: {loan.third_party_name}
+              </span>
+            )}
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">{loan.lender} · Interest rate: {loan.interest_rate}% p.a.</p>
+          {linkedCard && (
+            <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5">
+              Linked to: <span className="font-semibold text-foreground">{linkedCard.name} ({linkedCard.bank} •••• {linkedCard.last_four})</span>
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Link to={`/loans/${loan.id}/edit`}>
@@ -319,7 +346,7 @@ export function LoanDetailPage() {
               onClick={() => setShowPayEMI(true)}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl bg-foreground py-3.5 text-xs font-semibold text-background transition hover:opacity-90 active:scale-[0.98]"
             >
-              <Check size={13} /> Pay EMI #{nextEMI.month} · {formatCurrency(nextEMI.emiAmount, loan.currency)}
+              <Check size={13} /> {linkedCard ? 'Post EMI to Card' : `Pay EMI #${nextEMI.month}`} · {formatCurrency(nextEMI.emiAmount, loan.currency)}
             </button>
           ) : (
             <div className="flex flex-1 items-center justify-center bg-success/10 text-success rounded-2xl py-3.5 text-xs font-semibold">
@@ -718,6 +745,20 @@ export function LoanDetailPage() {
                   annual_rate: loan.interest_rate,
                   prepayment_type: 'part_prepayment',
                   notes: notes ? `Prepayment bonus: ${notes}` : 'EMI prepayment payload',
+                });
+              }
+
+              // Post CC Transaction if this is a linked loan
+              if (linkedCard) {
+                await createTransaction.mutateAsync({
+                  card_id: linkedCard.id,
+                  amount: nextEMI.emiAmount + extraAmount,
+                  transaction_type: 'debit',
+                  category: 'EMI',
+                  merchant: `${loan.name} EMI #${nextEMI.month}`,
+                  note: `Auto-posted from Linked Loan: ${loan.name}`,
+                  transaction_date: paymentDate,
+                  statement_day: linkedCard.statement_day,
                 });
               }
 

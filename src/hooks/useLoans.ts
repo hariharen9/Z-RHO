@@ -78,6 +78,9 @@ export function useCreateLoan() {
       emi_day: number;
       start_date: string;
       notes?: string;
+      linked_card_id?: string | null;
+      is_third_party?: boolean;
+      third_party_name?: string | null;
     }) => {
       if (!user) throw new Error('Not authenticated');
 
@@ -109,6 +112,9 @@ export function useCreateLoan() {
         total_interest_payable: totalInterest,
         total_amount_payable: input.principal_amount + totalInterest,
         notes: input.notes ?? null,
+        linked_card_id: input.linked_card_id ?? null,
+        is_third_party: input.is_third_party ?? false,
+        third_party_name: input.third_party_name ?? null,
         status: 'active',
       };
 

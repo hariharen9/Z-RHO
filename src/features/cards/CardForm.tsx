@@ -55,6 +55,7 @@ const cardSchema = z.object({
   card_network: z.enum(['visa', 'mastercard', 'amex', 'rupay', 'other']),
   currency: z.string(),
   credit_limit: z.coerce.number().positive('Credit limit must be positive'),
+  personal_limit: z.coerce.number().positive('Must be positive').nullable().optional().or(z.literal('')),
   statement_day: z.coerce.number().int().min(1).max(31, 'Must be 1-31'),
   due_day: z.coerce.number().int().min(1).max(31, 'Must be 1-31'),
   color: z.string(),
@@ -139,6 +140,7 @@ export function CardForm() {
       setValue('card_network', existingCard.card_network);
       setValue('currency', existingCard.currency);
       setValue('credit_limit', existingCard.credit_limit);
+      setValue('personal_limit', existingCard.personal_limit ?? '');
       setValue('statement_day', existingCard.statement_day);
       setValue('due_day', existingCard.due_day);
       setValue('color', existingCard.color);
@@ -149,11 +151,16 @@ export function CardForm() {
   const onSubmit = async (data: any) => {
     try {
       if (isEdit) {
-        await updateCard.mutateAsync({ id, ...data });
+        await updateCard.mutateAsync({ 
+          id, 
+          ...data,
+          personal_limit: data.personal_limit || null,
+        });
         navigate(`/cards/${id}`);
       } else {
         const card = await createCard.mutateAsync({
           ...data,
+          personal_limit: data.personal_limit || null,
           status: 'active',
           notes: data.notes ?? null,
         });
@@ -234,8 +241,8 @@ export function CardForm() {
               </div>
             </div>
 
-            {/* Card Network + Credit Limit */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Card Network */}
+            <div>
               <Controller
                 control={control}
                 name="card_network"
@@ -248,18 +255,38 @@ export function CardForm() {
                   />
                 )}
               />
+            </div>
+
+            {/* Limits */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
-                  Total Credit Limit
+                  Actual Bank Limit
                 </label>
                 <input
                   {...register('credit_limit')}
                   type="number"
                   step="0.01"
                   className={inputClass}
-                  placeholder="e.g. 500000"
+                  placeholder="e.g. 180000"
                 />
                 {errors.credit_limit && <p className="text-red-400 text-xs mt-1 font-medium">{errors.credit_limit.message}</p>}
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5 flex items-center gap-1.5">
+                  Personal Budget Limit <span className="text-[8px] bg-primary/20 text-primary px-1.5 py-0.5 rounded uppercase">Optional</span>
+                </label>
+                <input
+                  {...register('personal_limit')}
+                  type="number"
+                  step="0.01"
+                  className={inputClass}
+                  placeholder="e.g. 20000"
+                />
+                <p className="text-[9px] text-muted-foreground mt-1.5 px-1 leading-relaxed">
+                  Friend EMIs won't deduct from this artificial limit.
+                </p>
+                {errors.personal_limit && <p className="text-red-400 text-xs mt-1 font-medium">{errors.personal_limit.message}</p>}
               </div>
             </div>
 

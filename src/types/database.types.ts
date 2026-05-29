@@ -39,6 +39,9 @@ export interface Loan {
   total_interest_payable: number;
   total_amount_payable: number;
   notes: string | null;
+  linked_card_id: string | null;
+  is_third_party: boolean;
+  third_party_name: string | null;
   status: LoanStatus;
   created_at: string;
   updated_at: string;
@@ -67,8 +70,9 @@ export interface CreditCard {
   bank: string;
   last_four: string;
   card_network: CardNetwork;
-  currency: string;
   credit_limit: number;
+  personal_limit: number | null;
+  currency: string;
   statement_day: number;
   due_day: number;
   color: string;
