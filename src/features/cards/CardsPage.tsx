@@ -1,14 +1,14 @@
 import { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, CreditCard, Check, Zap, Calendar, TrendingDown } from 'lucide-react';
+import { Plus, CreditCard, Check, ChevronRight } from 'lucide-react';
 import { useCards } from '@/hooks/useCards';
 import { useAllCardTransactions } from '@/hooks/useTransactions';
 import { useBills } from '@/hooks/useBills';
-import { calculateCCUtilization, calculateCurrentBalance, calculateBillDates, getDueInfo, calculateDaysRemaining } from '@/lib/calculations';
-import { formatCurrency, formatCompactCurrency } from '@/lib/currency';
-import { CARD_NETWORK_LABELS } from '@/lib/constants';
-import { Progress } from '@/components/shared/Progress';
-import { format, startOfMonth, addMonths, parseISO, differenceInDays } from 'date-fns';
+import { calculateCurrentBalance, calculateBillDates, calculateDaysRemaining } from '@/lib/calculations';
+import { formatCurrency } from '@/lib/currency';
+import { CardNetworkLogo } from '@/components/shared/CardNetworkLogo';
+import { BankLogo } from '@/components/shared/BankLogo';
+import { format, startOfMonth, addMonths, parseISO } from 'date-fns';
 import type { CardStatus } from '@/types/database.types';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -125,10 +125,6 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
     return calculateCurrentBalance(transactions);
   }, [transactions]);
 
-  const utilizationRate = useMemo(() => {
-    return calculateCCUtilization(Math.max(0, currentBalance), card.credit_limit) / 100;
-  }, [currentBalance, card.credit_limit]);
-
   const availableLimit = useMemo(() => {
     return Math.max(0, card.credit_limit - Math.max(0, currentBalance));
   }, [card.credit_limit, currentBalance]);
@@ -141,8 +137,25 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
   );
   const { dueDate } = calculateBillDates(card.statement_day, card.due_day, nextBillingMonth);
   const daysToDue = calculateDaysRemaining(dueDate);
+  const dueDateParsed = parseISO(dueDate);
+  const dueMonth = format(dueDateParsed, 'MMM').toUpperCase();
+  const dueDay = format(dueDateParsed, 'd');
 
   const urgentDue = daysToDue <= 5;
+
+  // Bill payment status
+  const activeBill = useMemo(() => {
+    return bills.find((b: any) => b.status !== 'paid');
+  }, [bills]);
+
+  const billStatusLabel = useMemo(() => {
+    if (!activeBill) return 'Fully Paid';
+    if (activeBill.status === 'partially_paid') return 'Partially Paid';
+    if (activeBill.status === 'overdue') return 'Overdue';
+    return 'Pending';
+  }, [activeBill]);
+
+  const isBillPaid = !activeBill || activeBill.status === 'paid';
 
   // 3D Pointer interactions
   const cardRef = useRef<HTMLAnchorElement>(null);
@@ -162,14 +175,14 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
     const px = mouseX / width - 0.5;
     const py = mouseY / height - 0.5;
     
-    const rotateX = -py * 16;
-    const rotateY = px * 16;
+    const rotateX = -py * 12;
+    const rotateY = px * 12;
     
     const glareX = (mouseX / width) * 100;
     const glareY = (mouseY / height) * 100;
     
     setRotate({ x: rotateX, y: rotateY });
-    setGlare({ x: glareX, y: glareY, opacity: 0.22 });
+    setGlare({ x: glareX, y: glareY, opacity: 0.15 });
   };
 
   const handleMouseLeave = () => {
@@ -191,13 +204,13 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
       }}
       className="relative flex items-center justify-center"
     >
-      {/* Dynamic Brand Backlight Glow Halo */}
+      {/* Subtle ambient glow */}
       <div 
-        className="absolute -inset-1 rounded-[32px] blur-3xl opacity-20 transition-all duration-500 pointer-events-none z-0"
+        className="absolute -inset-2 rounded-[32px] blur-3xl transition-all duration-500 pointer-events-none z-0"
         style={{
           background: card.color,
-          transform: rotate.x !== 0 ? 'scale(1.15)' : 'scale(1.0)',
-          opacity: rotate.x !== 0 ? 0.35 : 0.20,
+          opacity: rotate.x !== 0 ? 0.18 : 0.08,
+          transform: rotate.x !== 0 ? 'scale(1.1)' : 'scale(1.0)',
         }}
       />
 
@@ -206,76 +219,142 @@ function CardGridItem({ card, index }: { card: any; index: number }) {
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         to={`/cards/${card.id}`}
-        className="group relative block overflow-hidden rounded-3xl border border-border p-5 text-left transition flex flex-col justify-between min-h-[210px] w-full z-10"
+        className="group relative block overflow-hidden rounded-2xl text-left w-full z-10"
         style={{
-          background: `radial-gradient(130% 70% at 0% 0%, ${card.color} 30%, color-mix(in oklab, ${card.color} 50%, black) 100%)`,
+          background: `linear-gradient(165deg, #1e1e24 0%, #141418 50%, #0d0d10 100%)`,
           transform: `perspective(1000px) rotateX(${rotate.x}deg) rotateY(${rotate.y}deg) scale3d(${rotate.x !== 0 ? '1.02' : '1'}, ${rotate.y !== 0 ? '1.02' : '1'}, 1)`,
-          transition: rotate.x === 0 ? 'transform 0.5s ease, box-shadow 0.5s ease, border-color 0.5s ease' : 'transform 0.1s ease-out, box-shadow 0.1s ease-out, border-color 0.1s ease-out',
+          transition: rotate.x === 0 ? 'transform 0.5s ease, box-shadow 0.5s ease' : 'transform 0.1s ease-out, box-shadow 0.1s ease-out',
           transformStyle: 'preserve-3d',
-          borderColor: rotate.x !== 0 ? 'rgba(255,255,255,0.25)' : 'var(--color-border)',
           boxShadow: rotate.x !== 0 
-            ? `0 20px 40px -12px color-mix(in oklab, ${card.color} 35%, rgba(0,0,0,0.6))` 
-            : '0 8px 24px -8px rgba(0,0,0,0.4)',
+            ? `0 20px 50px -10px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.06)` 
+            : '0 8px 30px -8px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05), inset 0 1px 0 rgba(255,255,255,0.04)',
         }}
       >
         {/* Specular glare reflection overlay */}
         <div 
-          className="absolute inset-0 pointer-events-none transition-opacity duration-300 ease-out z-0" 
+          className="absolute inset-0 pointer-events-none transition-opacity duration-300 ease-out z-0 rounded-2xl" 
           style={{
-            background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,${glare.opacity}), transparent 45%)`,
+            background: `radial-gradient(circle at ${glare.x}% ${glare.y}%, rgba(255,255,255,${glare.opacity}), transparent 50%)`,
           }}
         />
-        <div className="pointer-events-none absolute inset-0 opacity-20 bg-gradient-to-br from-white/10 to-transparent" />
 
-        {/* Card Identity */}
-        <div className="relative z-10 flex items-start justify-between" style={{ transform: 'translateZ(25px)' }}>
-          <div>
-            <div className="text-sm font-semibold tracking-wide text-white group-hover:text-white/95">
-              {card.name}
-            </div>
-            <div className="mt-0.5 text-[9px] uppercase tracking-[0.2em] text-white/50">
-              {card.bank} · •••• {card.last_four}
-            </div>
+        {/* Subtle top-left light sheen */}
+        <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{
+          background: 'radial-gradient(ellipse 80% 50% at 10% 10%, rgba(255,255,255,0.04), transparent)',
+        }} />
+
+        {/* === NETWORK BADGE — Top Center === */}
+        <div className="relative z-10 flex justify-center pt-3.5 pb-0" style={{ transform: 'translateZ(30px)' }}>
+          <div className="flex items-center gap-1.5 bg-white/[0.07] backdrop-blur-sm border border-white/[0.08] rounded-full px-3 py-1">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.6)]" />
+            <CardNetworkLogo network={card.card_network} size={11} className="text-white/90" />
           </div>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[9px] font-semibold tabular ${
-              urgentDue ? 'bg-destructive/20 text-red-300 border border-destructive/30' : 'bg-white/5 text-white/70 border border-white/10'
-            }`}
-          >
-            {daysToDue < 0
-              ? `${Math.abs(daysToDue)}d overdue`
-              : daysToDue === 0
-              ? 'Due today'
-              : `Due in ${daysToDue}d`}
-          </span>
         </div>
 
-        {/* Financial Outstanding Balances */}
-        <div className="relative z-10 mt-8 flex items-end justify-between" style={{ transform: 'translateZ(20px)' }}>
+        {/* === BANK NAME + CARD NAME + LAST FOUR === */}
+        <div className="relative z-10 flex items-start justify-between px-5 pt-3 pb-0" style={{ transform: 'translateZ(25px)' }}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0" style={{
+              background: `linear-gradient(135deg, ${card.color}40, ${card.color}15)`,
+              border: `1px solid ${card.color}30`,
+            }}>
+              <BankLogo bankName={card.bank} size={14} className="text-white" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-white/40 font-medium leading-none">{card.bank}</div>
+              <div className="text-sm font-semibold text-white/90 tracking-wide mt-0.5 truncate">{card.name}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 text-white/50 shrink-0 mt-0.5">
+            <span className="text-[11px] font-mono tracking-wider">····{card.last_four}</span>
+            <ChevronRight size={12} className="text-white/25" />
+          </div>
+        </div>
+
+        {/* === SEPARATOR LINE === */}
+        <div className="mx-5 mt-3.5 border-t border-white/[0.06]" />
+
+        {/* === TOTAL OUTSTANDING + AVAILABLE LIMIT === */}
+        <div className="relative z-10 flex items-start justify-between px-5 pt-3.5 pb-0" style={{ transform: 'translateZ(20px)' }}>
           <div>
-            <div className="text-[9px] uppercase tracking-widest text-white/40 font-semibold">Current balance</div>
-            <div className="text-2xl font-bold tabular text-white">
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-white/40 font-medium tracking-wide">Total Outstanding</span>
+              <ChevronRight size={10} className="text-white/20" />
+            </div>
+            <div className="text-xl font-bold tabular text-white mt-0.5 tracking-tight">
               {formatCurrency(Math.max(0, currentBalance), card.currency)}
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[9px] uppercase tracking-widest text-white/40 font-semibold">Available</div>
-            <div className="text-xs font-semibold text-white/80 tabular">
-              {formatCompactCurrency(availableLimit, card.currency)}
+            <div className="flex items-center gap-1 justify-end">
+              <span className="text-[10px] text-white/40 font-medium tracking-wide">Available Limit</span>
+              <ChevronRight size={10} className="text-white/20" />
+            </div>
+            <div className="text-base font-bold tabular text-white/80 mt-0.5 tracking-tight">
+              {formatCurrency(availableLimit, card.currency)}
             </div>
           </div>
         </div>
 
-        {/* Progress Bar (Repayment/Utilization) */}
-        <div className="relative z-10 mt-4" style={{ transform: 'translateZ(15px)' }}>
-          <Progress
-            value={utilizationRate}
-            height={4}
-            color={utilizationRate > 0.3 ? 'var(--color-warning)' : 'var(--color-success)'}
-          />
-          <div className="mt-2 flex justify-between text-[10px] text-white/50 font-semibold tabular">
-            <span>{(utilizationRate * 100).toFixed(0)}% util</span>
-            <span>Limit {formatCompactCurrency(card.credit_limit, card.currency)}</span>
+        {/* === BILL STATUS STRIP — Bottom === */}
+        <div className="relative z-10 mx-3 mt-4 mb-3 rounded-xl overflow-hidden" style={{ 
+          transform: 'translateZ(15px)',
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%)',
+          border: '1px solid rgba(255,255,255,0.06)',
+        }}>
+          <div className="flex items-center gap-0 px-0.5 py-0.5">
+            {/* Date Block */}
+            <div className="flex flex-col items-center justify-center px-3 py-2 rounded-lg shrink-0" style={{
+              background: `linear-gradient(135deg, ${card.color}30, ${card.color}15)`,
+              minWidth: '48px',
+            }}>
+              <span className="text-[8px] font-bold uppercase tracking-widest text-white/70 leading-none">{dueMonth}</span>
+              <span className="text-lg font-bold text-white leading-tight mt-px">{dueDay}</span>
+            </div>
+
+            {/* Bill Info */}
+            <div className="flex-1 px-3 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-white/50 font-medium">Bill</span>
+                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-sm tracking-wide ${
+                  isBillPaid 
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' 
+                    : urgentDue
+                    ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+                    : 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                }`}>
+                  {billStatusLabel}
+                </span>
+              </div>
+              <div className="text-[11px] text-white/70 font-semibold mt-0.5">
+                {daysToDue < 0
+                  ? <span className="text-red-400">Overdue by {Math.abs(daysToDue)}d</span>
+                  : daysToDue === 0
+                  ? <span className="text-amber-400">Due today</span>
+                  : <>Upcoming in <span className="text-white/90">{daysToDue}d</span></>
+                }
+              </div>
+            </div>
+
+            {/* Pay Early Button */}
+            {!isBillPaid && (
+              <div 
+                className="shrink-0 mr-1 rounded-lg px-3 py-2 text-[10px] font-bold tracking-wide transition-colors"
+                style={{
+                  background: `linear-gradient(135deg, ${card.color}, color-mix(in oklab, ${card.color} 70%, black))`,
+                  color: 'white',
+                }}
+              >
+                Pay Early
+              </div>
+            )}
+
+            {isBillPaid && (
+              <div className="shrink-0 mr-1 flex items-center gap-1 rounded-lg px-3 py-2 bg-emerald-500/10 border border-emerald-500/15">
+                <Check size={10} className="text-emerald-400" />
+                <span className="text-[10px] font-bold text-emerald-400 tracking-wide">Paid</span>
+              </div>
+            )}
           </div>
         </div>
       </Link>
