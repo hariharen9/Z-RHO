@@ -8,7 +8,7 @@ import { formatCurrency, convertCurrency } from '@/lib/currency';
 import { formatDate } from '@/lib/dates';
 import { SPEND_CATEGORIES } from '@/types/card.types';
 import { BankLogo } from '@/components/shared/BankLogo';
-import { useAuthStore } from '@/store/authStore';
+import { useProfile } from '@/hooks/useProfile';
 import { format, subDays, startOfMonth, isAfter, parseISO } from 'date-fns';
 import { Dropdown } from '@/components/ui/Dropdown';
 import type { DropdownOption } from '@/components/ui/Dropdown';
@@ -63,7 +63,8 @@ interface TransactionListProps {
 type DateRange = 'all' | 'this_month' | 'last_30' | 'last_90';
 
 export function TransactionList({ transactions, cards, currency, showCardContext }: TransactionListProps) {
-  const defaultCurrency = useAuthStore((s) => s.userProfile?.default_currency ?? 'INR');
+  const { data: profile } = useProfile();
+  const defaultCurrency = profile?.default_currency ?? 'INR';
   const targetCurrency = currency ?? defaultCurrency;
 
   const [search, setSearch] = useState('');
