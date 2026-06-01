@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, CreditCard, Check, ChevronRight } from 'lucide-react';
 import { useCards } from '@/hooks/useCards';
-import { useAllCardTransactions } from '@/hooks/useTransactions';
+import { useAllCardTransactions, useGlobalTransactions } from '@/hooks/useTransactions';
 import { useBills } from '@/hooks/useBills';
 import { calculateCurrentBalance, calculateBillDates, calculateDaysRemaining } from '@/lib/calculations';
 import { formatCurrency } from '@/lib/currency';
@@ -11,10 +11,13 @@ import { BankLogo } from '@/components/shared/BankLogo';
 import { format, startOfMonth, addMonths, parseISO } from 'date-fns';
 import type { CardStatus } from '@/types/database.types';
 import { motion, AnimatePresence } from 'framer-motion';
+import { TransactionList } from './TransactionList';
 
 export function CardsPage() {
+  const [activeTab, setActiveTab] = useState<'cards' | 'transactions'>('cards');
   const [statusFilter, setStatusFilter] = useState<CardStatus | undefined>('active');
-  const { data: cards = [], isLoading, error } = useCards(statusFilter);
+  const { data: cards = [], isLoading, error } = useCards(activeTab === 'cards' ? statusFilter : undefined);
+  const { data: globalTransactions = [], isLoading: txLoading } = useGlobalTransactions();
 
   return (
     <div className="space-y-6">
@@ -24,54 +27,72 @@ export function CardsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Credit Cards</h1>
           <p className="text-xs text-muted-foreground">
-            {cards.length} {statusFilter ?? 'total'} active revolving assets
+            {activeTab === 'cards' 
+              ? `${cards.length} ${statusFilter ?? 'total'} active revolving assets`
+              : `${globalTransactions.length} total transactions logged`
+            }
           </p>
         </div>
-        <Link to="/cards/new" className="md:hidden">
-          <button className="rounded-full border border-border bg-surface p-3 transition hover:bg-surface-elevated active:scale-90 text-foreground">
-            <Plus size={16} />
+        <Link to="/cards/new">
+          <button className="flex items-center justify-center gap-1.5 rounded-full bg-foreground p-3 md:px-4.5 md:py-2.5 text-xs font-bold text-background transition hover:opacity-90 active:scale-95 cursor-pointer">
+            <Plus size={14} />
+            <span className="hidden md:inline">Add new card</span>
           </button>
         </Link>
       </div>
 
-      {/* Filter and Add Row */}
-      <div className="flex items-center justify-between gap-4">
-        {/* Modern Filter Badges */}
-        <div className="flex gap-1 rounded-full border border-border bg-surface p-1 max-w-xs flex-1 justify-between items-center">
-          {([
-            { id: 'active', label: 'Active' },
-            { id: 'closed', label: 'Closed' },
-            { id: undefined, label: 'All' },
-          ] as { id: CardStatus | undefined; label: string }[]).map((tab) => {
-            const active = statusFilter === tab.id;
-            return (
-              <button
-                key={tab.label}
-                onClick={() => setStatusFilter(tab.id)}
-                className={`relative flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                  active ? 'text-background font-semibold' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {active && (
-                  <motion.div
-                    layoutId="card-filter-pill"
-                    className="absolute inset-0 rounded-full bg-foreground"
-                    transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-                  />
-                )}
-                <span className="relative z-10">{tab.label}</span>
-              </button>
-            );
-          })}
+      {/* Tab Switcher */}
+      <div className="flex p-1 bg-surface-elevated rounded-xl border border-border">
+        <button
+          onClick={() => setActiveTab('cards')}
+          className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
+            activeTab === 'cards' ? 'bg-foreground text-background shadow-md' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          My Cards
+        </button>
+        <button
+          onClick={() => setActiveTab('transactions')}
+          className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
+            activeTab === 'transactions' ? 'bg-foreground text-background shadow-md' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          All Transactions
+        </button>
+      </div>
+
+      {activeTab === 'cards' && (
+        <div className="flex items-center justify-between gap-4">
+          {/* Modern Filter Badges */}
+          <div className="flex gap-1 rounded-full border border-border bg-surface p-1 max-w-xs flex-1 justify-between items-center">
+            {([
+              { id: 'active', label: 'Active' },
+              { id: 'closed', label: 'Closed' },
+              { id: undefined, label: 'All' },
+            ] as { id: CardStatus | undefined; label: string }[]).map((tab) => {
+              const active = statusFilter === tab.id;
+              return (
+                <button
+                  key={tab.label}
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={`relative flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                    active ? 'text-background font-semibold' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {active && (
+                    <motion.div
+                      layoutId="card-filter-pill"
+                      className="absolute inset-0 rounded-full bg-foreground"
+                      transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                    />
+                  )}
+                  <span className="relative z-10">{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-
-        {/* Desktop add button, aligned right */}
-        <Link to="/cards/new" className="max-md:hidden">
-          <button className="flex items-center gap-1.5 rounded-full bg-foreground px-4.5 py-2.5 text-xs font-bold text-background transition hover:opacity-90 active:scale-95 cursor-pointer">
-            <Plus size={13} /> Add new card
-          </button>
-        </Link>
-      </div>
+      )}
 
       {/* Loading States */}
       {isLoading && (
@@ -89,7 +110,7 @@ export function CardsPage() {
       )}
 
       {/* Empty State */}
-      {!isLoading && cards.length === 0 && (
+      {activeTab === 'cards' && !isLoading && cards.length === 0 && (
         <div className="text-center py-16 border border-dashed border-border rounded-3xl bg-surface/30">
           <CreditCard className="mx-auto h-12 w-12 text-muted-foreground/60 stroke-1 mb-4" />
           <p className="text-sm text-muted-foreground mb-4">No credit cards found</p>
@@ -101,14 +122,32 @@ export function CardsPage() {
         </div>
       )}
 
-      {/* Responsive Card Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <AnimatePresence mode="popLayout">
-          {cards.map((card, index) => (
-            <CardGridItem key={card.id} card={card} index={index} />
-          ))}
-        </AnimatePresence>
-      </div>
+      {/* Main Content Area */}
+      {activeTab === 'cards' ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <AnimatePresence mode="popLayout">
+            {cards.map((card, index) => (
+              <CardGridItem key={card.id} card={card} index={index} />
+            ))}
+          </AnimatePresence>
+        </div>
+      ) : (
+        <div className="mt-4">
+          {txLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="animate-pulse h-20 w-full rounded-2xl bg-surface/50" />
+              ))}
+            </div>
+          ) : (
+            <TransactionList 
+              transactions={globalTransactions} 
+              cards={cards} 
+              showCardContext={true} 
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

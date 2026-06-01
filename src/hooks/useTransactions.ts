@@ -5,7 +5,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
-import type { CCTransaction, CCTransactionInsert, CCTransactionUpdate } from '@/types/database.types';
+import type { CCTransaction, CCTransactionInsert, CCTransactionUpdate, CCTransactionWithCard } from '@/types/database.types';
 import { determineBillingMonth } from '@/lib/calculations';
 
 const TX_KEY = 'cc_transactions';
@@ -79,6 +79,58 @@ export function useAllCardTransactions(cardId: string | undefined) {
       return data as CCTransaction[];
     },
     enabled: !!user && !!cardId,
+  });
+}
+
+/**
+ * Fetch all transactions across all cards for the user.
+ */
+export function useGlobalTransactions(filters?: TransactionFilters) {
+  const user = useAuthStore((s) => s.user);
+
+  return useQuery({
+    queryKey: [TX_KEY, 'global', filters],
+    queryFn: async () => {
+      let query = supabase
+        .from('cc_transactions')
+        .select(`
+          *,
+          credit_cards (
+            id,
+            name,
+            bank,
+            color,
+            currency,
+            last_four,
+            card_network
+          )
+        `)
+        .eq('user_id', user!.id)
+        .order('transaction_date', { ascending: false });
+
+      if (filters?.billingMonth) {
+        query = query.eq('billing_month', filters.billingMonth);
+      }
+      if (filters?.category) {
+        query = query.eq('category', filters.category);
+      }
+      if (filters?.dateFrom) {
+        query = query.gte('transaction_date', filters.dateFrom);
+      }
+      if (filters?.dateTo) {
+        query = query.lte('transaction_date', filters.dateTo);
+      }
+      if (filters?.search) {
+        query = query.or(
+          `merchant.ilike.%${filters.search}%,note.ilike.%${filters.search}%`
+        );
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data; // Will be typed as any or we can cast it in the component. We defined CCTransactionWithCard.
+    },
+    enabled: !!user,
   });
 }
 

@@ -18,6 +18,7 @@ interface DropdownProps {
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  size?: 'normal' | 'compact';
 }
 
 export function Dropdown({
@@ -26,6 +27,7 @@ export function Dropdown({
   value,
   onChange,
   className = '',
+  size = 'normal',
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -44,9 +46,11 @@ export function Dropdown({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const isCompact = size === 'compact';
+
   return (
-    <div ref={containerRef} className={`relative w-full ${className}`}>
-      {label && (
+    <div ref={containerRef} className={`relative ${isCompact ? 'w-auto shrink-0' : 'w-full'} ${className}`}>
+      {label && !isCompact && (
         <label className="block text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1.5">
           {label}
         </label>
@@ -56,7 +60,11 @@ export function Dropdown({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 bg-background/50 border border-border/80 rounded-2xl text-foreground focus:border-foreground/45 transition-all duration-300 outline-none backdrop-blur-md text-sm flex items-center justify-between text-left cursor-pointer hover:bg-surface-elevated/20"
+        className={`flex items-center justify-between text-left cursor-pointer transition-all duration-300 outline-none backdrop-blur-md ${
+          isCompact
+            ? 'px-3 py-2 bg-surface-elevated/80 border border-border/80 rounded-xl text-xs font-semibold text-foreground hover:bg-surface-elevated'
+            : 'w-full px-4 py-3 bg-background/50 border border-border/80 rounded-2xl text-sm text-foreground focus:border-foreground/45 hover:bg-surface-elevated/20'
+        }`}
       >
         <span className="flex items-center gap-2">
           {selectedOption?.icon}
@@ -65,6 +73,7 @@ export function Dropdown({
         <motion.span
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.2 }}
+          className="ml-2 shrink-0"
         >
           <ChevronDown size={14} className="text-muted-foreground" />
         </motion.span>
@@ -78,7 +87,9 @@ export function Dropdown({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.98 }}
             transition={{ duration: 0.15 }}
-            className="absolute z-50 w-full mt-2 rounded-2xl border border-border bg-surface p-1.5 shadow-2xl backdrop-blur-xl max-h-60 overflow-y-auto no-scrollbar"
+            className={`absolute z-50 mt-2 rounded-2xl border border-border bg-surface p-1.5 shadow-2xl backdrop-blur-xl max-h-60 overflow-y-auto no-scrollbar ${
+              isCompact ? 'min-w-[160px] w-max right-0 md:left-0' : 'w-full'
+            }`}
           >
             {options.map((opt) => {
               const active = opt.value === value;
@@ -90,7 +101,7 @@ export function Dropdown({
                     onChange(opt.value);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs text-left transition-colors cursor-pointer ${
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-left transition-colors cursor-pointer ${
                     active
                       ? 'bg-foreground text-background font-semibold'
                       : 'text-foreground hover:bg-surface-elevated'

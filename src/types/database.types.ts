@@ -96,6 +96,18 @@ export interface CCTransaction {
   created_at: string;
 }
 
+export interface CCTransactionWithCard extends CCTransaction {
+  credit_cards: {
+    id: string;
+    name: string;
+    bank: string;
+    color: string;
+    currency: string;
+    last_four: string;
+    card_network: string;
+  };
+}
+
 export interface CCBill {
   id: string;
   card_id: string;
