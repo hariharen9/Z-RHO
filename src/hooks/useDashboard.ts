@@ -6,8 +6,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
-import type { Loan, CreditCard, LoanPayment, CCBill } from '@/types/database.types';
-import type { DashboardSummary, UpcomingPayment, MonthlyOutflow, DebtHistoryPoint } from '@/types/common.types';
+import type { Loan, CreditCard, LoanPayment, CCBill, CCTransaction } from '@/types/database.types';
+import type { DashboardSummary, UpcomingPayment, MonthlyOutflow, DebtHistoryPoint, CategorySpend } from '@/types/common.types';
 import { getDueInfo, getNextEMIDate } from '@/lib/calculations';
 import { convertCurrency } from '@/lib/currency';
 import { getLastNMonths, formatMonthYear } from '@/lib/dates';
@@ -31,12 +31,12 @@ export function useDashboardStats(defaultCurrency: string = 'INR') {
       // Fetch active cards
       const { data: cards } = await supabase
         .from('credit_cards')
-        .select('credit_limit, currency, id')
+        .select('credit_limit, currency, id, name, color')
         .eq('status', 'active');
 
       // Group active card info by ID
-      const cardMap = new Map<string, Pick<CreditCard, 'credit_limit' | 'currency' | 'id'>>();
-      for (const card of (cards as Pick<CreditCard, 'credit_limit' | 'currency' | 'id'>[]) ?? []) {
+      const cardMap = new Map<string, Pick<CreditCard, 'credit_limit' | 'currency' | 'id' | 'name' | 'color'>>();
+      for (const card of (cards as Pick<CreditCard, 'credit_limit' | 'currency' | 'id' | 'name' | 'color'>[]) ?? []) {
         cardMap.set(card.id, card);
       }
 
@@ -73,8 +73,9 @@ export function useDashboardStats(defaultCurrency: string = 'INR') {
 
       let totalCreditLimit = 0;
       let totalAvailableCredit = 0;
+      const cardBreakdown: DashboardSummary['cardBreakdown'] = [];
 
-      for (const card of (cards as Pick<CreditCard, 'credit_limit' | 'currency' | 'id'>[]) ?? []) {
+      for (const card of (cards as Pick<CreditCard, 'credit_limit' | 'currency' | 'id' | 'name' | 'color'>[]) ?? []) {
         totalCreditLimit += convertCurrency(card.credit_limit, card.currency, defaultCurrency);
 
         const cardTxs = txsByCard.get(card.id) ?? [];
@@ -90,8 +91,17 @@ export function useDashboardStats(defaultCurrency: string = 'INR') {
         const available = Math.max(0, card.credit_limit - Math.max(0, cardOutstanding));
         totalAvailableCredit += convertCurrency(available, card.currency, defaultCurrency);
 
+        const convertedOutstanding = convertCurrency(Math.max(0, cardOutstanding), card.currency, defaultCurrency);
         // Also add credit card outstanding to total debt
-        totalDebt += convertCurrency(Math.max(0, cardOutstanding), card.currency, defaultCurrency);
+        totalDebt += convertedOutstanding;
+
+        cardBreakdown.push({
+          id: card.id,
+          name: card.name,
+          color: card.color,
+          limit: convertCurrency(card.credit_limit, card.currency, defaultCurrency),
+          outstanding: convertedOutstanding
+        });
       }
 
       let monthlyBills = 0;
@@ -107,6 +117,7 @@ export function useDashboardStats(defaultCurrency: string = 'INR') {
         totalCreditLimit: Math.round(totalCreditLimit * 100) / 100,
         totalAvailableCredit: Math.round(totalAvailableCredit * 100) / 100,
         currency: defaultCurrency,
+        cardBreakdown,
       };
     },
     enabled: !!user,
@@ -352,5 +363,58 @@ export function useMonthlyOutflow(defaultCurrency: string = 'INR') {
     },
     enabled: !!user,
     staleTime: 300_000,
+  });
+}
+
+/**
+ * Spend per category for the current month.
+ */
+export function useCurrentMonthCategorySpends(defaultCurrency: string = 'INR') {
+  const user = useAuthStore((s) => s.user);
+
+  return useQuery({
+    queryKey: ['dashboard', 'categorySpends', user?.id, defaultCurrency],
+    queryFn: async (): Promise<CategorySpend[]> => {
+      const startOfThisMonth = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+
+      // Fetch all credit cards to get their currency mapping
+      const { data: cards } = await supabase
+        .from('credit_cards')
+        .select('id, currency');
+      const cardCurrencyMap = new Map<string, string>();
+      for (const c of cards ?? []) {
+        cardCurrencyMap.set(c.id, c.currency);
+      }
+
+      // Fetch debit transactions for current month
+      const { data: transactions } = await supabase
+        .from('cc_transactions')
+        .select('amount, category, card_id')
+        .eq('transaction_type', 'debit')
+        .gte('transaction_date', startOfThisMonth);
+
+      const sumsByCategory = new Map<string, number>();
+
+      for (const tx of (transactions as Pick<CCTransaction, 'amount' | 'category' | 'card_id'>[]) ?? []) {
+        const cardCurrency = cardCurrencyMap.get(tx.card_id) ?? defaultCurrency;
+        const convertedAmount = convertCurrency(tx.amount, cardCurrency, defaultCurrency);
+        const currentSum = sumsByCategory.get(tx.category) ?? 0;
+        sumsByCategory.set(tx.category, currentSum + convertedAmount);
+      }
+
+      const results: CategorySpend[] = [];
+      for (const [category, amount] of sumsByCategory.entries()) {
+        results.push({
+          category,
+          amount: Math.round(amount * 100) / 100,
+          currency: defaultCurrency,
+        });
+      }
+
+      // Sort descending by amount
+      return results.sort((a, b) => b.amount - a.amount);
+    },
+    enabled: !!user,
+    staleTime: 60_000,
   });
 }

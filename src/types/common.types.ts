@@ -31,12 +31,25 @@ export interface UpcomingPayment {
   linkedId: string; // loan.id or card.id for navigation
 }
 
-/** Dashboard summary */
 export interface DashboardSummary {
   totalOutstandingDebt: number;
   thisMonthObligations: number;
   totalCreditLimit: number;
   totalAvailableCredit: number;
+  currency: string;
+  cardBreakdown: Array<{
+    id: string;
+    name: string;
+    color: string;
+    limit: number;
+    outstanding: number;
+  }>;
+}
+
+/** Category spend data */
+export interface CategorySpend {
+  category: string;
+  amount: number;
   currency: string;
 }
 

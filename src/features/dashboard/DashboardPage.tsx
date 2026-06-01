@@ -16,6 +16,16 @@ import {
   Briefcase,
   User,
   Coins,
+  UtensilsCrossed,
+  Plane,
+  ShoppingBag,
+  Fuel,
+  Bolt,
+  Tv,
+  HeartPulse,
+  Cpu,
+  MoreHorizontal,
+  CreditCard,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -26,6 +36,7 @@ import {
   useUpcomingPayments,
   useDebtHistory,
   useMonthlyOutflow,
+  useCurrentMonthCategorySpends,
 } from '@/hooks/useDashboard';
 import { useLoans } from '@/hooks/useLoans';
 import { useCards } from '@/hooks/useCards';
@@ -43,6 +54,9 @@ import {
   Line,
   BarChart,
   Bar,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -63,6 +77,7 @@ export function DashboardPage() {
   const { data: cards = [], isLoading: cardsLoading } = useCards('active');
   const { data: debtHistory = [], isLoading: historyLoading } = useDebtHistory(currency);
   const { data: outflow = [], isLoading: outflowLoading } = useMonthlyOutflow(currency);
+  const { data: categorySpends = [], isLoading: categoryLoading } = useCurrentMonthCategorySpends(currency);
 
   // Pick top loan by APR for Avalanche tracker
   const rankedLoansByAPR = useMemo(() => {
@@ -127,7 +142,7 @@ export function DashboardPage() {
     return Math.max(0, stats.totalOutstandingDebt - totals.outstandingLoans);
   }, [stats, totals.outstandingLoans]);
 
-  if (statsLoading || loansLoading || cardsLoading || historyLoading || outflowLoading) {
+  if (statsLoading || loansLoading || cardsLoading || historyLoading || outflowLoading || categoryLoading) {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="h-44 w-full rounded-3xl bg-surface/50" />
@@ -540,7 +555,110 @@ export function DashboardPage() {
         </section>
       </div>
 
-      {/* SECTION 4: INTERACTIVE LOAN CALCULATOR */}
+      {/* SECTION 4: CREDIT CARD ANALYTICS */}
+      <div className="grid grid-cols-12 gap-4">
+        {/* Pie Chart: Outstanding Distribution */}
+        <section className="col-span-12 xl:col-span-6 rounded-3xl border border-border bg-surface p-6 flex flex-col justify-between min-h-[360px]">
+          <header className="flex items-center justify-between border-b border-border/40 pb-3 mb-4">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <CreditCard size={14} className="text-primary" /> Card Balances
+              </h2>
+              <p className="text-[11px] text-muted-foreground">Current outstanding by card</p>
+            </div>
+          </header>
+          {stats?.cardBreakdown && stats.cardBreakdown.length > 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Tooltip content={<CustomPieTooltip currency={currency} />} />
+                  <Pie
+                    data={stats.cardBreakdown.filter(c => c.outstanding > 0)}
+                    dataKey="outstanding"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={85}
+                    paddingAngle={3}
+                    stroke="none"
+                  >
+                    {stats.cardBreakdown.filter(c => c.outstanding > 0).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || '#6366f1'} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap justify-center gap-3 mt-4">
+                {stats.cardBreakdown.filter(c => c.outstanding > 0).map(c => (
+                  <div key={c.id} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color || '#6366f1' }} />
+                    <span className="truncate max-w-[100px]">{c.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground p-8 text-center border border-dashed border-border rounded-2xl">
+              No outstanding balances to display.
+            </div>
+          )}
+        </section>
+
+        {/* Category Spends this Month */}
+        <section className="col-span-12 xl:col-span-6 rounded-3xl border border-border bg-surface p-6 flex flex-col min-h-[360px]">
+          <header className="flex items-center justify-between border-b border-border/40 pb-3 mb-4">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <Zap size={14} className="text-warning" /> Spends This Month
+              </h2>
+              <p className="text-[11px] text-muted-foreground">Credit card spending by category</p>
+            </div>
+            {categorySpends.length > 0 && (
+              <div className="text-xs tabular font-bold text-foreground bg-background px-3 py-1.5 rounded-xl border border-border">
+                {formatCurrency(categorySpends.reduce((a, b) => a + b.amount, 0), currency)}
+              </div>
+            )}
+          </header>
+          
+          <div className="flex-1 space-y-4 overflow-y-auto max-h-[250px] pr-2">
+            {categorySpends.length > 0 ? categorySpends.map((cat, i) => {
+              const maxCat = categorySpends[0].amount;
+              const pct = (cat.amount / maxCat) * 100;
+              const Icon = getCategoryIcon(cat.category);
+              return (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="h-9 w-9 shrink-0 rounded-full bg-secondary border border-border/50 text-muted-foreground flex items-center justify-center">
+                    <Icon size={14} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-end mb-1.5">
+                      <div className="text-xs font-semibold text-foreground truncate">{cat.category}</div>
+                      <div className="text-xs tabular font-bold text-foreground">
+                        {formatCurrency(cat.amount, currency)}
+                      </div>
+                    </div>
+                    <div className="h-1.5 w-full bg-background rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.8, delay: i * 0.1, ease: 'easeOut' }}
+                        className="h-full bg-primary"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            }) : (
+              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground p-8 text-center border border-dashed border-border rounded-2xl h-full mt-4">
+                No credit card spends recorded this month.
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* SECTION 5: INTERACTIVE LOAN CALCULATOR */}
       <div className="grid grid-cols-12 gap-4">
         <DashboardCalculator currency={currency} />
       </div>
@@ -972,4 +1090,48 @@ function DashboardCalculator({ currency }: { currency: string }) {
       </div>
     </section>
   );
+}
+
+// CC Analytics Helper Components
+
+function CustomPieTooltip({ active, payload, currency }: any) {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="rounded-xl border border-border bg-background/90 backdrop-blur-md p-3 shadow-xl pointer-events-none">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.color || '#6366f1' }} />
+          <span className="text-xs font-bold text-foreground">{data.name}</span>
+        </div>
+        <div className="space-y-1">
+          <div className="flex justify-between gap-4 text-[10px]">
+            <span className="text-muted-foreground uppercase tracking-wider font-semibold">Outstanding</span>
+            <span className="font-bold tabular text-foreground">{formatCurrency(data.outstanding, currency)}</span>
+          </div>
+          <div className="flex justify-between gap-4 text-[10px]">
+            <span className="text-muted-foreground uppercase tracking-wider font-semibold">Total Limit</span>
+            <span className="font-bold tabular text-foreground">{formatCurrency(data.limit, currency)}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
+const CATEGORY_ICONS: Record<string, any> = {
+  'Food & Dining': UtensilsCrossed,
+  'Travel & Transport': Plane,
+  'Shopping & Retail': ShoppingBag,
+  'Fuel': Fuel,
+  'Bills & Utilities': Bolt,
+  'Entertainment & Leisure': Tv,
+  'Health & Medical': HeartPulse,
+  'Subscriptions & Services': Cpu,
+  'Education': Briefcase,
+  'Other': MoreHorizontal,
+};
+
+function getCategoryIcon(cat: string) {
+  return CATEGORY_ICONS[cat] || MoreHorizontal;
 }
