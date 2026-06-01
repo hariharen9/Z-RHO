@@ -391,13 +391,13 @@ export function useCurrentMonthCategorySpends(defaultCurrency: string = 'INR') {
         .from('cc_transactions')
         .select('amount, category, card_id')
         .eq('transaction_type', 'debit')
-        .gte('transaction_date', startOfThisMonth);
+        .eq('billing_month', startOfThisMonth);
 
       const sumsByCategory = new Map<string, number>();
 
       for (const tx of (transactions as Pick<CCTransaction, 'amount' | 'category' | 'card_id'>[]) ?? []) {
         const cardCurrency = cardCurrencyMap.get(tx.card_id) ?? defaultCurrency;
-        const convertedAmount = convertCurrency(tx.amount, cardCurrency, defaultCurrency);
+        const convertedAmount = convertCurrency(Number(tx.amount), cardCurrency, defaultCurrency);
         const currentSum = sumsByCategory.get(tx.category) ?? 0;
         sumsByCategory.set(tx.category, currentSum + convertedAmount);
       }
