@@ -9,14 +9,12 @@ import { formatCurrency } from '@/lib/currency';
 import { CardNetworkLogo } from '@/components/shared/CardNetworkLogo';
 import { BankLogo } from '@/components/shared/BankLogo';
 import { format, startOfMonth, addMonths, parseISO } from 'date-fns';
-import type { CardStatus } from '@/types/database.types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TransactionList } from './TransactionList';
 
 export function CardsPage() {
   const [activeTab, setActiveTab] = useState<'cards' | 'transactions'>('cards');
-  const [statusFilter, setStatusFilter] = useState<CardStatus | undefined>('active');
-  const { data: cards = [], isLoading, error } = useCards(activeTab === 'cards' ? statusFilter : undefined);
+  const { data: cards = [], isLoading, error } = useCards();
   const { data: globalTransactions = [], isLoading: txLoading } = useGlobalTransactions();
 
   return (
@@ -28,7 +26,7 @@ export function CardsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Credit Cards</h1>
           <p className="text-xs text-muted-foreground">
             {activeTab === 'cards' 
-              ? `${cards.length} ${statusFilter ?? 'total'} active revolving assets`
+              ? `${cards.length} active revolving assets`
               : `${globalTransactions.length} total transactions logged`
             }
           </p>
@@ -61,38 +59,7 @@ export function CardsPage() {
         </button>
       </div>
 
-      {activeTab === 'cards' && (
-        <div className="flex items-center justify-between gap-4">
-          {/* Modern Filter Badges */}
-          <div className="flex gap-1 rounded-full border border-border bg-surface p-1 max-w-xs flex-1 justify-between items-center">
-            {([
-              { id: 'active', label: 'Active' },
-              { id: 'closed', label: 'Closed' },
-              { id: undefined, label: 'All' },
-            ] as { id: CardStatus | undefined; label: string }[]).map((tab) => {
-              const active = statusFilter === tab.id;
-              return (
-                <button
-                  key={tab.label}
-                  onClick={() => setStatusFilter(tab.id)}
-                  className={`relative flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                    active ? 'text-background font-semibold' : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {active && (
-                    <motion.div
-                      layoutId="card-filter-pill"
-                      className="absolute inset-0 rounded-full bg-foreground"
-                      transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-                    />
-                  )}
-                  <span className="relative z-10">{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+
 
       {/* Loading States */}
       {isLoading && (

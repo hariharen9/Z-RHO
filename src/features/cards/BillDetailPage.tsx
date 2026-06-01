@@ -17,7 +17,8 @@ import {
   Zap, 
   Check,
   TrendingDown,
-  DollarSign
+  DollarSign,
+  Home
 } from 'lucide-react';
 import { useBill } from '@/hooks/useBills';
 import { useTransactions } from '@/hooks/useTransactions';
@@ -38,6 +39,8 @@ const CATEGORY_ICONS: Record<string, any> = {
   'Health & Medical': Bolt,
   'Subscriptions & Services': Cpu,
   'Education': Cpu,
+  'Home & Housing': Home,
+  'Groceries & essentials': ShoppingBag,
   'Other': MoreHorizontal,
 };
 

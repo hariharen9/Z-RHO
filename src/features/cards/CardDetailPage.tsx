@@ -28,6 +28,7 @@ import {
   Award,
   CircleDollarSign,
   Briefcase,
+  Home,
   ChevronRight,
   Check,
   ShieldCheck,
@@ -84,6 +85,8 @@ const CATEGORY_ICONS: Record<string, any> = {
   'Health & Medical': HeartPulse,
   'Subscriptions & Services': Cpu,
   'Education': Briefcase,
+  'Home & Housing': Home,
+  'Groceries & essentials': ShoppingBag,
   'Other': MoreHorizontal,
 };
 

@@ -12,6 +12,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { format, subDays, startOfMonth, isAfter, parseISO } from 'date-fns';
 import { Dropdown } from '@/components/ui/Dropdown';
 import type { DropdownOption } from '@/components/ui/Dropdown';
+import { EditCCTransactionModal } from './EditCCTransactionModal';
 import {
   Calendar,
   Tag,
@@ -44,7 +45,8 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   'Health & Medical': <HeartPulse size={14} className="shrink-0" />,
   'Subscriptions & Services': <Rss size={14} className="shrink-0" />,
   'Education': <GraduationCap size={14} className="shrink-0" />,
-  'Home & Living': <Home size={14} className="shrink-0" />,
+  'Home & Housing': <Home size={14} className="shrink-0" />,
+  'Groceries & essentials': <ShoppingBag size={14} className="shrink-0" />,
   'Electronics & Gadgets': <Smartphone size={14} className="shrink-0" />,
   'Gifts & Donations': <Gift size={14} className="shrink-0" />,
   'Transfer & Payment': <Send size={14} className="shrink-0" />,
@@ -71,6 +73,7 @@ export function TransactionList({ transactions, cards, currency, showCardContext
   const [categoryFilter, setCategoryFilter] = useState('');
   const [cardFilter, setCardFilter] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>('all');
+  const [editingTx, setEditingTx] = useState<Tx | null>(null);
 
   const dateOptions: DropdownOption[] = useMemo(() => [
     { value: 'all', label: 'All Time', icon: <Clock size={14} className="shrink-0" /> },
@@ -234,7 +237,8 @@ export function TransactionList({ transactions, cards, currency, showCardContext
             return (
               <div
                 key={tx.id}
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-surface-elevated transition-colors border border-transparent hover:border-border/50 group"
+                onClick={() => setEditingTx(tx)}
+                className="cursor-pointer flex items-center justify-between p-3 rounded-xl hover:bg-surface-elevated transition-colors border border-transparent hover:border-border/50 group"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {showCardContext && hasCardContext && (
@@ -289,6 +293,13 @@ export function TransactionList({ transactions, cards, currency, showCardContext
           })}
         </div>
       )}
+
+      {/* Edit Modal */}
+      <EditCCTransactionModal
+        isOpen={!!editingTx}
+        onClose={() => setEditingTx(null)}
+        transaction={editingTx}
+      />
     </div>
   );
 }
