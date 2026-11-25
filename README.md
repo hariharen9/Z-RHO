@@ -2,7 +2,7 @@
 
 A sleek, robust, full-stack personal debt tracking Progressive Web App (PWA). Built specifically to track loans and credit card debts, it automates derived financial values, provides visual progress updates, and empowers users with powerful prepayment simulators.
 
-**Built with 💜 by [Hariharen](https://hariharen.site).**
+**Built with 💜 by [Hariharen](https://hariharen.space).**
 
 ---
 

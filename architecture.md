@@ -2,7 +2,7 @@
 
 > **Z-RHO** (originally spec'd as "DebtWise") is a full-stack, mobile-first **Personal Debt Lifecycle Manager** — a PWA for tracking loans and credit card debts with automated financial math, visual progress, and prepayment simulators.
 >
-> Built by [Hariharen](https://hariharen.site) with React 18 + TypeScript + Vite + Supabase.
+> Built by [Hariharen](https://hariharen.space) with React 18 + TypeScript + Vite + Supabase.
 
 ---
 

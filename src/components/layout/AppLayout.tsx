@@ -242,7 +242,7 @@ export function AppLayout() {
           <footer className="w-full py-8 text-center text-[10px] uppercase tracking-widest text-muted-foreground border-t border-border/20 mt-12 max-lg:hidden">
             Engineered by{' '}
             <a
-              href="https://hariharen.site"
+              href="https://hariharen.space"
               target="_blank"
               rel="noopener noreferrer"
               className="text-foreground hover:text-foreground/80 transition-colors font-semibold"

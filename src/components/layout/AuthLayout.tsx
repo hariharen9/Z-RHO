@@ -144,7 +144,7 @@ export function AuthLayout() {
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground relative z-10">
           Engineered by{' '}
           <a
-            href="https://hariharen.site"
+            href="https://hariharen.space"
             target="_blank"
             rel="noopener noreferrer"
             className="text-foreground hover:text-foreground/80 transition-colors font-semibold"
@@ -197,7 +197,7 @@ export function AuthLayout() {
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground pt-8 pb-4 lg:hidden">
           Engineered by{' '}
           <a
-            href="https://hariharen.site"
+            href="https://hariharen.space"
             target="_blank"
             rel="noopener noreferrer"
             className="text-foreground hover:text-foreground/80 transition-colors font-semibold"
